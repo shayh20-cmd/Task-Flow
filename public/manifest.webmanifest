@@ -1,0 +1,16 @@
+{
+  "name": "Recipin – ספר המתכונים",
+  "short_name": "Recipin",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fffaf5",
+  "theme_color": "#c2410c",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }],
+  "share_target": {
+    "action": "/share-target",
+    "method": "GET",
+    "params": { "title": "title", "text": "text", "url": "url" }
+  }
+}

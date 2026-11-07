@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <symbol id="pin" viewBox="0 0 32 32">
+    <path d="M16 2c-6.1 0-11 4.7-11 10.6C5 20.3 16 30 16 30s11-9.7 11-17.4C27 6.7 22.1 2 16 2z" fill="#c2410c"/>
+    <path d="M12.3 9.5v4.2a2 2 0 0 0 1.4 1.9V21h1.2v-5.4a2 2 0 0 0 1.4-1.9V9.5h-.9v3.8h-.8V9.5h-.8v3.8h-.8V9.5z" fill="#fff"/>
+    <path d="M19.6 9.4c-1 .4-1.7 1.9-1.7 3.6 0 1.2.5 2 1.1 2.3V21h1.2V9.4z" fill="#fff"/>
+  </symbol>
+  <use href="#pin"/>
+</svg>

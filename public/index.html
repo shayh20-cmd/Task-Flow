@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Recipin</title>
+  <meta name="description" content="Recipin – כל המתכונים שלך במקום אחד" />
+  <meta name="theme-color" content="#c2410c" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="logo" href="#/" aria-label="Recipin – דף הבית">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><use href="/icon.svg#pin" /></svg>
+      <span>Recipin</span>
+    </a>
+    <form class="search" role="search" id="searchForm">
+      <input id="searchInput" type="search" placeholder="חיפוש מתכון, מצרך או תגית…" autocomplete="off" />
+    </form>
+    <nav class="top-actions" id="topActions"></nav>
+  </header>
+  <main id="view" tabindex="-1"></main>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <dialog id="dialog"></dialog>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
