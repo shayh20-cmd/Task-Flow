@@ -53,6 +53,11 @@ export function openDb(file) {
       PRIMARY KEY (collection_id, recipe_id)
     );
 
+    CREATE TABLE IF NOT EXISTS custom_tags (   -- tags created in tag management before any recipe has them
+      tag        TEXT PRIMARY KEY,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS shares (
       token      TEXT PRIMARY KEY,
       scope      TEXT NOT NULL,          -- book | collection | recipe
@@ -196,8 +201,44 @@ class Store {
     for (const t of all) ins.run(id, t, auto.has(t) ? 1 : 0);
   }
 
+  /** Tag management: rename (merging into an existing tag), delete, create, (un)assign recipes. */
+  createTag(tag) {
+    this.db.prepare('INSERT OR IGNORE INTO custom_tags (tag) VALUES (?)').run(tag);
+  }
+  renameTag(from, to) {
+    this.db.exec('BEGIN');
+    try {
+      // recipes that already have `to` just lose `from`; the rest are renamed
+      this.db.prepare('DELETE FROM recipe_tags WHERE tag = ? AND recipe_id IN (SELECT recipe_id FROM recipe_tags WHERE tag = ?)').run(from, to);
+      this.db.prepare('UPDATE recipe_tags SET tag = ?, auto = 0 WHERE tag = ?').run(to, from);
+      this.db.prepare('DELETE FROM custom_tags WHERE tag = ?').run(from);
+      this.db.prepare('INSERT OR IGNORE INTO custom_tags (tag) VALUES (?)').run(to);
+      this.db.exec('COMMIT');
+    } catch (e) {
+      this.db.exec('ROLLBACK');
+      throw e;
+    }
+  }
+  deleteTag(tag) {
+    this.db.prepare('DELETE FROM recipe_tags WHERE tag = ?').run(tag);
+    this.db.prepare('DELETE FROM custom_tags WHERE tag = ?').run(tag);
+  }
+  setTagRecipes(tag, { add = [], remove = [] }) {
+    const ins = this.db.prepare('INSERT OR IGNORE INTO recipe_tags (recipe_id, tag, auto) VALUES (?, ?, 0)');
+    const del = this.db.prepare('DELETE FROM recipe_tags WHERE recipe_id = ? AND tag = ?');
+    for (const id of add) if (this.getRecipe(Number(id))) ins.run(Number(id), tag);
+    for (const id of remove) del.run(Number(id), tag);
+  }
+
   allTags() {
-    return this.db.prepare('SELECT tag, COUNT(*) AS count FROM recipe_tags GROUP BY tag ORDER BY count DESC, tag').all();
+    return this.db
+      .prepare(
+        `SELECT tag, SUM(n) AS count FROM (
+           SELECT tag, COUNT(*) AS n FROM recipe_tags GROUP BY tag
+           UNION ALL SELECT tag, 0 AS n FROM custom_tags
+         ) GROUP BY tag ORDER BY count DESC, tag`,
+      )
+      .all();
   }
 
   // ---- collections ----

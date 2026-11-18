@@ -112,3 +112,27 @@ test('password protects editing but not share links', async () => {
     rmSync(d, { recursive: true, force: true });
   }
 });
+
+test('tag management: create, rename (with merge), assign, delete', async () => {
+  const a = (await call('/api/recipes', 'POST', { title: 'א', tags: ['ערב', 'מהיר'] })).data;
+  const b = (await call('/api/recipes', 'POST', { title: 'ב', tags: ['מהירים'] })).data;
+  const enc = encodeURIComponent;
+  assert.equal((await call('/api/tags', 'POST', { name: 'חג' })).status, 201);
+  let tags = (await call('/api/tags')).data;
+  assert.ok(tags.find((t) => t.tag === 'חג' && t.count === 0), 'empty tag is listed');
+  // assign the new tag
+  await call(`/api/tags/${enc('חג')}/recipes`, 'POST', { add: [a.id, b.id] });
+  assert.equal((await call(`/api/recipes?tag=${enc('חג')}`)).data.length, 2);
+  // rename into an existing tag merges, without duplicates
+  await call(`/api/tags/${enc('מהירים')}`, 'PUT', { name: 'מהיר' });
+  tags = (await call('/api/tags')).data;
+  assert.equal(tags.find((t) => t.tag === 'מהיר').count, 2);
+  assert.equal(tags.find((t) => t.tag === 'מהירים'), undefined);
+  // automatic tags cannot be renamed
+  assert.equal((await call(`/api/tags/${enc('חלבי')}`, 'PUT', { name: 'x' })).status, 400);
+  // remove from one recipe, then delete everywhere
+  await call(`/api/tags/${enc('חג')}/recipes`, 'POST', { remove: [a.id] });
+  assert.deepEqual((await call(`/api/recipes?tag=${enc('חג')}`)).data.map((r) => r.title), ['ב']);
+  assert.equal((await call(`/api/tags/${enc('ערב')}`, 'DELETE')).status, 204);
+  assert.deepEqual((await call(`/api/recipes/${a.id}`)).data.tags.sort(), ['מהיר']);
+});

@@ -745,3 +745,19 @@ dialog::backdrop { background: var(--scrim); backdrop-filter: blur(3px); }
 .ocr-row b { margin-inline-start: auto; font-variant-numeric: tabular-nums; }
 .ocr-status .progress { margin-top: 10px; }
 #ocrState .notice, #ocrInline .notice { margin-top: var(--s-4); }
+
+/* ---------- tag management ---------- */
+.list-title { margin: var(--s-6) 0 var(--s-3); display: flex; align-items: baseline; gap: 8px; font-size: 1.15rem; }
+.tag-list, .recipe-rows { list-style: none; margin: 0; padding: 0; border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--clay); overflow: hidden; }
+.tag-list li, .recipe-rows li { display: flex; align-items: center; gap: 4px; padding: 4px 8px 4px 4px; }
+.tag-list li + li, .recipe-rows li + li { border-top: 1px solid var(--line); }
+.tag-link { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; min-height: 56px; padding: 6px 12px; color: var(--ink); text-decoration: none; }
+.tag-name { font-weight: 700; }
+.recipe-rows { margin-top: var(--s-4); }
+.recipe-rows a { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 6px 8px; color: var(--ink); text-decoration: none; font-weight: 600; }
+.recipe-rows img, .recipe-rows .bubble, .pick img, .pick .bubble { width: 44px; height: 44px; flex: none; border-radius: 12px; object-fit: cover; }
+.recipe-rows .bubble, .pick .bubble { display: grid; place-items: center; background: var(--surface-2); color: var(--ink-2); }
+.pick-list { display: flex; flex-direction: column; max-height: 52vh; overflow: auto; border-radius: var(--r-md); background: var(--surface-2); }
+.pick { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 6px 12px; cursor: pointer; font-weight: 600; }
+.pick + .pick { border-top: 1px solid var(--line); }
+.pick input { width: 22px; height: 22px; min-height: 0; padding: 0; accent-color: var(--primary); flex: none; }

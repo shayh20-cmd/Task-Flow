@@ -47,6 +47,9 @@ function hasWord(text, words) {
  * @param {{ingredients?: string[], totalMinutes?: number|null}} recipe
  * @returns {string[]} auto tags (Hebrew)
  */
+/** Tags that autoTags() can produce. They are managed by Recipin, not renamed by hand. */
+export const AUTO_TAGS = ['בשרי', 'חלבי', 'פרווה', 'דגים', 'טבעוני', 'צמחוני', 'עד 30 דקות', 'הכנה ארוכה'];
+
 export function autoTags(recipe) {
   const ings = (recipe.ingredients || []).map(lower).filter((l) => !l.startsWith('##'));
   const tags = [];

@@ -175,6 +175,8 @@ async function route() {
     else if (parts[0] === 'import') return location.replace('#/add/link?url=' + encodeURIComponent(params.get('url') || ''));
     else if (parts[0] === 'r' && parts[2] === 'edit') await showEditPage(Number(parts[1]));
     else if (parts[0] === 'r') await showRecipe(Number(parts[1]));
+    else if (parts[0] === 'settings' && parts[1] === 'tags') await showTagsManager();
+    else if (parts[0] === 'tags' && parts[1]) await showTagDetail(decodeURIComponent(parts[1]));
     else if (parts[0] === 'settings' || (APP && parts[0] === 'shares')) await showSettings();
     else if (parts[0] === 'shares') await showShares();
     else await showHome();
@@ -196,10 +198,11 @@ const NAV = [
   { href: '#/fav', key: 'fav', label: 'מועדפים', ic: 'heart' },
   { href: '#/shares', key: 'shares', label: 'שיתופים', ic: 'share-2' },
 ];
-const navItems = () =>
-  APP ? NAV.map((n) => (n.key === 'shares' ? { href: '#/settings', key: 'settings', label: 'הגדרות', ic: 'settings' } : n)) : NAV;
+const SETTINGS_NAV = { href: '#/settings', key: 'settings', label: 'הגדרות', ic: 'settings' };
+const navItems = () => (APP ? NAV.map((n) => (n.key === 'shares' ? SETTINGS_NAV : n)) : NAV);
+const topNavItems = () => (APP ? navItems() : [...NAV, SETTINGS_NAV]).filter((n) => !n.fab);
 function renderChrome(parts) {
-  const key = parts[0] === 'c' ? 'collections' : parts[0] === 'import' ? 'add' : parts[0] || '';
+  const key = parts[0] === 'c' ? 'collections' : parts[0] === 'import' ? 'add' : parts[0] === 'tags' ? 'settings' : parts[0] || '';
   const cur = (k) => raw(k === key ? 'aria-current="page"' : '');
   if (READONLY) {
     render($('#topnav'), html``);
@@ -211,7 +214,7 @@ function renderChrome(parts) {
   }
   render(
     $('#topnav'),
-    html`${navItems().filter((n) => !n.fab).map((n) => html`<a href="${n.href}" ${cur(n.key)}>${icon(n.ic)}${n.label}</a>`)}`,
+    html`${topNavItems().map((n) => html`<a href="${n.href}" ${cur(n.key)}>${icon(n.ic)}${n.label}</a>`)}`,
   );
   render($('#topCta'), html`<button class="btn round quiet" id="themeBtn" aria-label="צבעי הספר">${icon('palette')}</button><a class="btn primary hide-m" href="#/add">${icon('plus')}תיוק מתכון</a>`);
   $('#themeBtn').onclick = themeDialog;
@@ -1389,10 +1392,9 @@ async function mountEditor(host, r) {
         <div class="field">
           <label class="label" for="tagText">תגיות <span class="hint">· הירוקות נוספו אוטומטית לפי המצרכים</span></label>
           <div class="tag-row">
-            <div class="tag-input" id="tagInput"><input id="tagText" placeholder="תגית חדשה, למשל: שבת" list="tagList" enterkeyhint="done" autocomplete="off" /></div>
+            <div class="tag-input" id="tagInput"><input id="tagText" placeholder="תגית חדשה, למשל: שבת" enterkeyhint="done" autocomplete="off" autocorrect="off" /></div>
             <button type="button" class="btn soft" id="tagAdd">${icon('plus', 'sm')}הוספה</button>
           </div>
-          <datalist id="tagList">${state.tags.map((t) => html`<option value="${t.tag}"></option>`)}</datalist>
           <div class="suggest" id="tagSuggest"></div>
         </div>
         ${state.collections.length
@@ -1446,16 +1448,25 @@ async function mountEditor(host, r) {
       c.onclick = () => {
         ed.tags = ed.tags.filter((x) => x !== t);
         if (ed.autoTags.has(t)) ed.removedAuto.add(t);
-        drawTags();
-        input.focus();
+        drawTags(); // no focus: that would open the keyboard and jump the screen
       };
       input.before(c);
     }
+    drawSuggest();
+  };
+  // our own suggestions (instead of the browser's datalist popup), filtered by what is typed
+  const drawSuggest = () => {
     const used = new Set(ed.tags);
-    const sugg = state.tags.map((t) => t.tag).filter((t) => !used.has(t) && !KOSHER[t]).slice(0, 10);
+    const q = ($('#tagText')?.value || '').trim().replace(/^#/, '');
+    const sugg = state.tags
+      .map((t) => t.tag)
+      .filter((t) => !used.has(t) && !KOSHER[t] && (!q || t.includes(q)))
+      .slice(0, 12);
     render(
       $('#tagSuggest'),
-      sugg.length ? html`<span class="hint">הצעות:</span>${sugg.map((t) => html`<button type="button" class="chip" data-t="${t}">${icon('plus', 'sm')}${t}</button>`)}` : html``,
+      sugg.length
+        ? html`<span class="hint">${q ? 'תגיות קיימות:' : 'הצעות:'}</span>${sugg.map((t) => html`<button type="button" class="chip" data-t="${t}">${icon('plus', 'sm')}${t}</button>`)}`
+        : html``,
     );
   };
   const addTag = (t) => {
@@ -1485,15 +1496,20 @@ async function mountEditor(host, r) {
   });
   $('#tagText').addEventListener('input', (e) => {
     if (/[,،\n]/.test(e.target.value)) commitTag();
+    else drawSuggest();
   });
   $('#tagText').addEventListener('change', () => commitTag());
   $('#tagAdd').addEventListener('click', () => {
     commitTag();
     $('#tagText').focus();
   });
+  // tapping a suggestion must not blur the input first (blur would commit the half-typed word)
+  $('#tagSuggest').addEventListener('mousedown', (e) => e.target.closest('[data-t]') && e.preventDefault());
   $('#tagSuggest').onclick = (e) => {
     const b = e.target.closest('[data-t]');
-    if (b) addTag(b.dataset.t);
+    if (!b) return;
+    $('#tagText').value = '';
+    addTag(b.dataset.t);
   };
 
   let autoTimer = null;
@@ -1849,6 +1865,11 @@ async function showSettings() {
           </div>`
         : ''}
       <section class="ed-card" style="margin-top:24px">
+        <h2>${icon('tag')}תגיות</h2>
+        <p class="muted">כל התגיות בספר: שינוי שם, מחיקה, הוספה, ואילו מתכונים קיבלו כל תגית.</p>
+        <a class="btn soft" href="#/settings/tags" style="align-self:flex-start">${icon('tag', 'sm')}ניהול תגיות</a>
+      </section>
+      <section class="ed-card" style="margin-top:16px">
         <h2>${icon('palette')}מראה</h2>
         <p class="muted">שישה סגנונות צבע לבחירה. הבחירה נשמרת במכשיר.</p>
         <button class="btn soft" id="pickTheme" style="align-self:flex-start">${icon('palette', 'sm')}בחירת צבעים</button>
@@ -1896,6 +1917,188 @@ async function showSettings() {
       toast(err instanceof SyntaxError ? 'הקובץ אינו גיבוי תקין' : err.message, { error: true });
     }
   });
+}
+
+// ---------- tag management ----------
+const tagHref = (t) => `#/tags/${encodeURIComponent(t)}`;
+const recipesWord = (n) => (n === 1 ? 'מתכון אחד' : `${n} מתכונים`);
+// Hebrew prefix letter before a number takes a hyphen: "ל-2 מתכונים", but "למתכון אחד"
+const withPrefix = (letter, n) => (n === 1 ? `${letter}מתכון אחד` : `${letter}-${n} מתכונים`);
+
+function tagNameDialog({ title, value = '', confirmLabel }) {
+  return new Promise((resolve) => {
+    openDialog(
+      html`<form class="dlg" id="tagForm" novalidate>
+        <div class="dlg-head"><h2>${title}</h2><button type="button" class="btn round quiet" data-close aria-label="סגירה">${icon('x')}</button></div>
+        <div class="field"><label class="label" for="tagName">שם התגית</label><input id="tagName" value="${value}" autocomplete="off" enterkeyhint="done" /></div>
+        <div class="dlg-actions"><span class="spacer"></span><button class="btn primary">${icon('check', 'sm')}${confirmLabel}</button></div>
+      </form>`,
+      () => {
+        const input = $('#tagName');
+        input.focus();
+        input.select();
+        dialog.addEventListener('close', () => resolve(null), { once: true });
+        $('#tagForm').onsubmit = (e) => {
+          e.preventDefault();
+          const name = input.value.trim().replace(/^#/, '');
+          if (!name) return input.setAttribute('aria-invalid', 'true');
+          resolve(name);
+          dialog.close();
+        };
+      },
+    );
+  });
+}
+
+async function renameTag(from) {
+  const to = await tagNameDialog({ title: `שינוי שם: ${from}`, value: from, confirmLabel: 'שמירה' });
+  if (!to || to === from) return null;
+  const exists = state.tags.find((t) => t.tag === to);
+  if (exists && !confirm(`התגית "${to}" כבר קיימת. לאחד את "${from}" לתוכה?`)) return null;
+  await api(`/api/tags/${encodeURIComponent(from)}`, { method: 'PUT', body: { name: to } });
+  toast(exists ? `"${from}" אוחדה לתוך "${to}"` : 'שם התגית עודכן', { ic: 'tag' });
+  return to;
+}
+
+async function deleteTag(tag, count) {
+  if (!confirm(count ? `למחוק את התגית "${tag}" ${withPrefix('מ', count)}? המתכונים עצמם נשארים בספר.` : `למחוק את התגית "${tag}"?`)) return false;
+  await api(`/api/tags/${encodeURIComponent(tag)}`, { method: 'DELETE' });
+  toast('התגית נמחקה', { ic: 'trash-2' });
+  return true;
+}
+
+async function showTagsManager() {
+  document.title = 'ניהול תגיות · Recipin';
+  await refreshMeta();
+  const AUTO = new Set(state.tags.filter((t) => t.auto || KOSHER[t.tag]).map((t) => t.tag));
+  const mine = state.tags.filter((t) => !AUTO.has(t.tag));
+  const auto = state.tags.filter((t) => AUTO.has(t.tag));
+  const row = (t, editable) => html`<li data-tag="${t.tag}">
+      <a class="tag-link" href="${tagHref(t.tag)}"><span class="tag-name">${t.tag}</span><span class="muted small">${t.count ? recipesWord(t.count) : 'עוד בלי מתכונים'}</span></a>
+      ${editable
+        ? html`<button class="btn round quiet" data-act="rename" aria-label="שינוי שם לתגית ${t.tag}">${icon('pencil', 'sm')}</button>
+          <button class="btn round quiet danger" data-act="delete" aria-label="מחיקת התגית ${t.tag}">${icon('trash-2', 'sm')}</button>`
+        : ''}
+    </li>`;
+  render(
+    view,
+    html`<div class="page narrow">
+      <a class="back-link" href="#/settings">${icon('arrow-right', 'sm')}הגדרות</a>
+      <div class="page-head"><div><div class="eyebrow">${icon('tag', 'sm')}ניהול</div><h1>התגיות שלי</h1></div></div>
+      <form class="tag-row" id="newTagForm" novalidate>
+        <div class="field" style="flex:1"><label class="sr-only" for="newTag">תגית חדשה</label><input id="newTag" placeholder="תגית חדשה, למשל: מתכוני חג" autocomplete="off" enterkeyhint="done" /></div>
+        <button class="btn primary">${icon('plus', 'sm')}הוספה</button>
+      </form>
+      ${state.tags.length > 8
+        ? html`<div class="searchbox" style="margin-top:12px">${icon('search')}<label class="sr-only" for="tagFilter">חיפוש תגית</label><input id="tagFilter" type="search" placeholder="חיפוש תגית…" autocomplete="off" /></div>`
+        : ''}
+      <h2 class="list-title">התגיות שלי <small class="muted">${mine.length}</small></h2>
+      ${mine.length
+        ? html`<ul class="tag-list" id="mineList">${mine.map((t) => row(t, true))}</ul>`
+        : html`<p class="muted">עוד אין תגיות משלך. הוסיפו תגית למעלה, או בעריכה של מתכון.</p>`}
+      ${auto.length
+        ? html`<h2 class="list-title">תגיות אוטומטיות</h2>
+          <p class="muted small">Recipin מוסיף אותן לבד לפי המצרכים והזמנים. אפשר להסיר אותן ממתכון מסוים בעריכה שלו.</p>
+          <ul class="tag-list">${auto.map((t) => row(t, false))}</ul>`
+        : ''}
+    </div>`,
+  );
+  $('#newTagForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const name = $('#newTag').value.trim().replace(/^#/, '');
+    if (!name) return $('#newTag').focus();
+    if (state.tags.some((t) => t.tag === name)) return toast('התגית כבר קיימת', { error: true });
+    await api('/api/tags', { method: 'POST', body: { name } });
+    toast('התגית נוספה', { ic: 'tag' });
+    showTagsManager();
+  };
+  $('#tagFilter')?.addEventListener('input', (e) => {
+    const q = e.target.value.trim();
+    $$('.tag-list li').forEach((li) => (li.hidden = !!q && !li.dataset.tag.includes(q)));
+  });
+  $('#mineList')?.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-act]');
+    if (!b) return;
+    const tag = b.closest('li').dataset.tag;
+    const count = state.tags.find((t) => t.tag === tag)?.count || 0;
+    if (b.dataset.act === 'rename' ? await renameTag(tag) : await deleteTag(tag, count)) showTagsManager();
+  });
+}
+
+async function showTagDetail(tag) {
+  document.title = `${tag} · Recipin`;
+  await refreshMeta();
+  const auto = !!state.tags.find((t) => t.tag === tag)?.auto || !!KOSHER[tag];
+  const recipes = await api(`/api/recipes?tag=${encodeURIComponent(tag)}`);
+  render(
+    view,
+    html`<div class="page narrow">
+      <a class="back-link" href="#/settings/tags">${icon('arrow-right', 'sm')}כל התגיות</a>
+      <div class="page-head">
+        <div><div class="eyebrow">${icon('tag', 'sm')}${auto ? 'תגית אוטומטית' : 'תגית'}</div><h1>${tag}</h1><p class="muted" style="margin-top:6px">${recipes.length ? recipesWord(recipes.length) : 'עוד אין מתכונים עם התגית הזו'}</p></div>
+        ${auto
+          ? ''
+          : html`<div class="actions">
+              <button class="btn quiet" id="tagRename">${icon('pencil', 'sm')}שינוי שם</button>
+              <button class="btn quiet danger" id="tagDelete">${icon('trash-2', 'sm')}מחיקה</button>
+            </div>`}
+      </div>
+      <button class="btn primary" id="tagAddRecipes">${icon('plus', 'sm')}הוספת מתכונים לתגית</button>
+      ${recipes.length
+        ? html`<ul class="recipe-rows" id="tagRecipes">${recipes.map(
+            (r) => html`<li data-id="${r.id}">
+              <a href="#/r/${r.id}">${safeUrl(r.cover) ? html`<img src="${safeUrl(r.cover)}" alt="" loading="lazy" />` : html`<span class="bubble">${icon('cooking-pot', 'sm')}</span>`}<span>${r.title}</span></a>
+              <button class="btn round quiet" data-remove="${r.id}" aria-label="הסרת התגית מ${r.title}">${icon('x', 'sm')}</button>
+            </li>`,
+          )}</ul>`
+        : ''}
+    </div>`,
+  );
+  $('#tagRename')?.addEventListener('click', async () => {
+    const to = await renameTag(tag);
+    if (to) location.replace(tagHref(to));
+  });
+  $('#tagDelete')?.addEventListener('click', async () => {
+    if (await deleteTag(tag, recipes.length)) location.hash = '#/settings/tags';
+  });
+  $('#tagRecipes')?.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-remove]');
+    if (!b) return;
+    await api(`/api/tags/${encodeURIComponent(tag)}/recipes`, { method: 'POST', body: { remove: [Number(b.dataset.remove)] } });
+    toast('התגית הוסרה מהמתכון', { ic: 'tag' });
+    showTagDetail(tag);
+  });
+  $('#tagAddRecipes').onclick = async () => {
+    const all = await api('/api/recipes');
+    const candidates = all.filter((r) => !r.tags.includes(tag));
+    if (!candidates.length) return toast('כל המתכונים כבר עם התגית הזו', { ic: 'tag' });
+    openDialog(
+      html`<form class="dlg" id="pickForm">
+        <div class="dlg-head"><h2>הוספה לתגית "${tag}"</h2><button type="button" class="btn round quiet" data-close aria-label="סגירה">${icon('x')}</button></div>
+        ${candidates.length > 8 ? html`<input id="pickFilter" type="search" placeholder="חיפוש מתכון…" autocomplete="off" />` : ''}
+        <div class="pick-list">${candidates.map(
+          (r) => html`<label class="pick" data-title="${r.title}"><input type="checkbox" value="${r.id}" />
+            ${safeUrl(r.cover) ? html`<img src="${safeUrl(r.cover)}" alt="" loading="lazy" />` : html`<span class="bubble">${icon('cooking-pot', 'sm')}</span>`}<span>${r.title}</span></label>`,
+        )}</div>
+        <div class="dlg-actions"><span class="spacer"></span><button class="btn primary">${icon('check', 'sm')}הוספה</button></div>
+      </form>`,
+      () => {
+        $('#pickFilter')?.addEventListener('input', (e) => {
+          const q = e.target.value.trim();
+          $$('.pick', dialog).forEach((l) => (l.hidden = !!q && !l.dataset.title.includes(q)));
+        });
+        $('#pickForm').onsubmit = async (e) => {
+          e.preventDefault();
+          const add = $$('.pick input:checked', dialog).map((c) => Number(c.value));
+          if (!add.length) return dialog.close();
+          await api(`/api/tags/${encodeURIComponent(tag)}/recipes`, { method: 'POST', body: { add } });
+          dialog.close();
+          toast(`התגית נוספה ${withPrefix('ל', add.length)}`, { ic: 'tag' });
+          showTagDetail(tag);
+        };
+      },
+    );
+  };
 }
 
 // ---------- boot ----------

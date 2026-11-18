@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { openDb } from './db.js';
 import { extractFromUrl, extractFromHtml, parseDoc } from './extract.js';
 import { instagramPost, importInstagram } from '../public/shared/instagram.js';
-import { autoTags } from '../public/shared/autotag.js';
+import { autoTags, AUTO_TAGS } from '../public/shared/autotag.js';
 import { safeFetch } from './net.js';
 import { OCR_FILES } from '../scripts/ocr-assets.mjs';
 
@@ -150,7 +150,31 @@ export function createApp({ dataDir = join(ROOT, 'data'), dbFile, password = pro
     res.json({ tags: autoTags({ ingredients: toList(req.body.ingredients).map(String), totalMinutes: Number(req.body.totalMinutes) || null }) });
   });
 
-  app.get('/api/tags', (_req, res) => res.json(store.allTags()));
+  app.get('/api/tags', (_req, res) => res.json(store.allTags().map((t) => ({ ...t, auto: AUTO_TAGS.includes(t.tag) }))));
+  const tagName = (v) => String(v ?? '').trim().replace(/^#/, '').slice(0, 40);
+  app.post('/api/tags', (req, res) => {
+    const name = tagName(req.body.name);
+    if (!name) return res.status(400).json({ error: 'חסר שם לתגית' });
+    store.createTag(name);
+    res.status(201).json({ tag: name });
+  });
+  app.put('/api/tags/:tag', (req, res) => {
+    const from = tagName(req.params.tag);
+    const to = tagName(req.body.name);
+    if (!to) return res.status(400).json({ error: 'חסר שם לתגית' });
+    if (AUTO_TAGS.includes(from)) return res.status(400).json({ error: 'תגית אוטומטית אי אפשר לשנות' });
+    if (to !== from) store.renameTag(from, to);
+    res.json({ tag: to });
+  });
+  app.delete('/api/tags/:tag', (req, res) => {
+    store.deleteTag(tagName(req.params.tag));
+    res.status(204).end();
+  });
+  app.post('/api/tags/:tag/recipes', (req, res) => {
+    const tag = tagName(req.params.tag);
+    store.setTagRecipes(tag, { add: toList(req.body.add), remove: toList(req.body.remove) });
+    res.json({ tag });
+  });
 
   // ---------- collections ----------
   app.get('/api/collections', (_req, res) => res.json(store.listCollections()));

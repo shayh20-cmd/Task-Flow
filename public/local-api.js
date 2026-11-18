@@ -1,11 +1,11 @@
 // On-device backend for the Android app: answers the same /api/* calls as the Node server,
 // but stores everything in IndexedDB on the phone. Images are kept as (resized) blobs.
-import { autoTags } from './shared/autotag.js';
+import { autoTags, AUTO_TAGS } from './shared/autotag.js';
 import { extractFromHtml, parseDoc } from './shared/extract-dom.js';
 import { instagramPost, importInstagram } from './shared/instagram.js';
 
 const DB_NAME = 'recipin';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // v2: 'tags' store for tags created in tag management
 let dbPromise;
 
 function openDb() {
@@ -16,6 +16,7 @@ function openDb() {
       if (!db.objectStoreNames.contains('recipes')) db.createObjectStore('recipes', { keyPath: 'id', autoIncrement: true });
       if (!db.objectStoreNames.contains('collections')) db.createObjectStore('collections', { keyPath: 'id', autoIncrement: true });
       if (!db.objectStoreNames.contains('images')) db.createObjectStore('images', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('tags')) db.createObjectStore('tags', { keyPath: 'tag' });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -214,16 +215,17 @@ const b64ToBlob = (b64, type) => {
 };
 
 export async function exportBackup() {
-  const [recipes, collections, images] = await Promise.all([getAll('recipes'), getAll('collections'), getAll('images')]);
+  const [recipes, collections, images, tags] = await Promise.all([getAll('recipes'), getAll('collections'), getAll('images'), getAll('tags')]);
   const imgs = [];
   for (const i of images) imgs.push({ id: i.id, type: i.blob.type || 'image/jpeg', data: await blobToB64(i.blob) });
-  return { app: 'recipin', version: 1, exportedAt: new Date().toISOString(), recipes, collections, images: imgs };
+  return { app: 'recipin', version: 1, exportedAt: new Date().toISOString(), recipes, collections, tags, images: imgs };
 }
 
 /** Replaces everything on the device with the backup's content. */
 export async function restoreBackup(data) {
   if (!data || data.app !== 'recipin' || !Array.isArray(data.recipes)) throw new Error('הקובץ אינו גיבוי של Recipin');
-  await Promise.all([clear('recipes'), clear('collections'), clear('images')]);
+  await Promise.all([clear('recipes'), clear('collections'), clear('images'), clear('tags')]);
+  for (const t of data.tags || []) await put('tags', t);
   for (const i of data.images || []) await put('images', { id: i.id, blob: b64ToBlob(i.data, i.type) });
   for (const c of data.collections || []) await put('collections', c);
   for (const r of data.recipes) await put('recipes', { ...DEFAULTS, ...r });
@@ -297,11 +299,54 @@ export async function localApi(path, { method = 'GET', body, form } = {}) {
     return { tags: autoTags({ ingredients: toList(body?.ingredients).map(String), totalMinutes: Number(body?.totalMinutes) || null }) };
 
   if (res === 'tags') {
-    const counts = {};
-    for (const r of await getAll('recipes')) for (const t of r.tags) counts[t] = (counts[t] || 0) + 1;
-    return Object.entries(counts)
-      .map(([tag, count]) => ({ tag, count }))
-      .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag, 'he'));
+    const name = (v) => String(v ?? '').trim().replace(/^#/, '').slice(0, 40);
+    const tag = idStr ? name(decodeURIComponent(idStr)) : '';
+    const sub = parts[2];
+    if (!idStr && method === 'GET') {
+      const counts = {};
+      for (const t of await getAll('tags')) counts[t.tag] = 0;
+      for (const r of await getAll('recipes')) for (const t of r.tags) counts[t] = (counts[t] || 0) + 1;
+      return Object.entries(counts)
+        .map(([t, count]) => ({ tag: t, count, auto: AUTO_TAGS.includes(t) }))
+        .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag, 'he'));
+    }
+    if (!idStr && method === 'POST') {
+      const t = name(body?.name);
+      if (!t) throw err(400, 'חסר שם לתגית');
+      await put('tags', { tag: t, createdAt: now });
+      return { tag: t };
+    }
+    if (sub === 'recipes' && method === 'POST') {
+      const add = new Set(toList(body?.add).map(Number));
+      const remove = new Set(toList(body?.remove).map(Number));
+      for (const r of await getAll('recipes')) {
+        if (add.has(r.id) && !r.tags.includes(tag)) await put('recipes', { ...r, tags: [...r.tags, tag] });
+        if (remove.has(r.id) && r.tags.includes(tag))
+          await put('recipes', { ...r, tags: r.tags.filter((x) => x !== tag), autoTags: (r.autoTags || []).filter((x) => x !== tag) });
+      }
+      return { tag };
+    }
+    if (method === 'PUT') {
+      const to = name(body?.name);
+      if (!to) throw err(400, 'חסר שם לתגית');
+      if (AUTO_TAGS.includes(tag)) throw err(400, 'תגית אוטומטית אי אפשר לשנות');
+      if (to !== tag) {
+        for (const r of await getAll('recipes')) {
+          if (!r.tags.includes(tag)) continue;
+          const tags = [...new Set(r.tags.map((x) => (x === tag ? to : x)))];
+          await put('recipes', { ...r, tags, autoTags: (r.autoTags || []).filter((x) => x !== tag) });
+        }
+        await del('tags', tag);
+        await put('tags', { tag: to, createdAt: now });
+      }
+      return { tag: to };
+    }
+    if (method === 'DELETE') {
+      for (const r of await getAll('recipes'))
+        if (r.tags.includes(tag)) await put('recipes', { ...r, tags: r.tags.filter((x) => x !== tag), autoTags: (r.autoTags || []).filter((x) => x !== tag) });
+      await del('tags', tag);
+      return null;
+    }
   }
 
   if (res === 'collections') {
