@@ -40,3 +40,15 @@ export function extractFromHtml(html, url = '') {
     url,
   );
 }
+
+/** Small query adapter over cheerio, used by the Instagram importer. */
+export function parseDoc(html) {
+  const $ = cheerio.load(html);
+  return {
+    all: (sel) => $(sel).toArray(),
+    html: (node) => $(node).html() || '',
+    text: (node) => $(node).text(),
+    attr: (node, n) => $(node).attr(n),
+    meta: (n) => $(`meta[property="${n}"]`).attr('content') || $(`meta[name="${n}"]`).attr('content') || '',
+  };
+}

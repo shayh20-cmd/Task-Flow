@@ -1,7 +1,8 @@
 // On-device backend for the Android app: answers the same /api/* calls as the Node server,
 // but stores everything in IndexedDB on the phone. Images are kept as (resized) blobs.
 import { autoTags } from './shared/autotag.js';
-import { extractFromHtml } from './shared/extract-dom.js';
+import { extractFromHtml, parseDoc } from './shared/extract-dom.js';
+import { instagramPost, importInstagram } from './shared/instagram.js';
 
 const DB_NAME = 'recipin';
 const DB_VERSION = 1;
@@ -168,7 +169,17 @@ async function importUrl(body) {
   if (m) url = m[0];
   if (!/^https?:\/\//i.test(url)) throw Object.assign(new Error('נא להדביק קישור שמתחיל ב-http'), { status: 400 });
   let result;
-  try {
+  if (instagramPost(url) && !body.html) {
+    const fetchText = async (u, headers) => {
+      const r = await fetch(u, { headers });
+      if (!r.ok) throw new Error(`שגיאה ${r.status}`);
+      return r.text();
+    };
+    result = await importInstagram(url, { fetchText, parse: (h) => parseDoc(h) }).catch((e) => ({
+      method: 'link', source: 'instagram', error: e.message,
+      recipe: { title: 'מתכון מאינסטגרם', sourceUrl: url, sourceName: 'Instagram', ingredients: [], steps: [], suggestedTags: [] },
+    }));
+  } else try {
     let html = body.html;
     let finalUrl = url;
     if (!html) {

@@ -5,7 +5,8 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openDb } from './db.js';
-import { extractFromUrl, extractFromHtml } from './extract.js';
+import { extractFromUrl, extractFromHtml, parseDoc } from './extract.js';
+import { instagramPost, importInstagram } from '../public/shared/instagram.js';
 import { autoTags } from '../public/shared/autotag.js';
 import { safeFetch } from './net.js';
 
@@ -127,7 +128,14 @@ export function createApp({ dataDir = join(ROOT, 'data'), dbFile, password = pro
     if (!/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'נא להדביק קישור שמתחיל ב-http' });
     const duplicate = store.findBySource(url);
     let result;
-    try {
+    if (instagramPost(url) && !req.body.html) {
+      const fetchText = async (u, headers) => {
+        const r = await safeFetch(u, { headers, signal: AbortSignal.timeout(15000) });
+        if (!r.ok) throw new Error(`שגיאה ${r.status}`);
+        return r.text();
+      };
+      result = await importInstagram(url, { fetchText, parse: parseDoc });
+    } else try {
       result = req.body.html ? extractFromHtml(String(req.body.html), url) : await extractFromUrl(url);
     } catch (e) {
       // Site unreachable / blocked us: still let the user save it as a link card.

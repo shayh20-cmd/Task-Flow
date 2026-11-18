@@ -19,3 +19,16 @@ export function extractFromHtml(html, url = '', DOMParserImpl = globalThis.DOMPa
     url,
   );
 }
+
+/** Small query adapter over DOMParser, used by the Instagram importer. */
+export function parseDoc(html, DOMParserImpl = globalThis.DOMParser) {
+  const doc = new DOMParserImpl().parseFromString(html, 'text/html');
+  const metaSel = (attr, n) => [...doc.querySelectorAll(`meta[${attr}]`)].find((m) => m.getAttribute(attr) === n);
+  return {
+    all: (sel) => [...doc.querySelectorAll(sel)],
+    html: (node) => node.innerHTML,
+    text: (node) => node.textContent || '',
+    attr: (node, n) => node.getAttribute(n) ?? undefined,
+    meta: (n) => (metaSel('property', n) || metaSel('name', n))?.getAttribute('content') || '',
+  };
+}

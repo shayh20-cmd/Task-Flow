@@ -710,3 +710,10 @@ dialog::backdrop { background: var(--scrim); backdrop-filter: blur(3px); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; scroll-behavior: auto !important; }
 }
+
+/* ---------- paste recipe text ---------- */
+.paste-box { margin-top: var(--s-4); padding: var(--s-4) var(--s-5); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--clay); }
+.paste-box summary { cursor: pointer; font-weight: 700; display: flex; align-items: center; gap: 8px; min-height: 32px; list-style: none; }
+.paste-box summary::-webkit-details-marker { display: none; }
+.paste-box summary::after { content: '+'; margin-inline-start: auto; font-size: 1.3rem; color: var(--ink-2); }
+.paste-box[open] summary::after { content: '–'; }

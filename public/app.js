@@ -1,5 +1,6 @@
 // Recipin – client (vanilla JS modules, hash routing, no build step)
 import { scaleIngredient, baseServings, findDurations, formatClock, formatQty } from './kitchen.js';
+import { parseRecipeText } from './shared/recipe-text.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -992,22 +993,31 @@ function showAddLink(initial) {
       const res = await api('/api/import', { method: 'POST', body: { url } });
       clearInterval(ticker);
       const r = res.recipe;
-      const found = res.method !== 'link';
       const nSteps = r.steps.filter((s) => !s.startsWith('## ')).length;
+      const hasRecipe = r.ingredients.length > 0 || nSteps > 0;
+      const ig = res.source === 'instagram';
+      const found = ig ? hasRecipe : res.method !== 'link';
+      let msg;
+      if (ig && hasRecipe)
+        msg = html`<strong>קראנו את הפוסט מאינסטגרם:</strong> ${r.ingredients.length} מצרכים ו-${nSteps} שלבים. בפוסטים הכתיבה חופשית, אז כדאי לעבור על הפרטים לפני שמירה.`;
+      else if (ig && res.caption)
+        msg = html`<strong>קיבלנו את הטקסט של הפוסט, אבל לא זיהינו בו מצרכים ושלבים.</strong> הטקסט מופיע למטה: אפשר לסדר אותו (למשל להוסיף שורה "מצרכים:" ושורה "אופן ההכנה:") וללחוץ "סידור למתכון".`;
+      else if (ig)
+        msg = html`<strong>אינסטגרם לא נתן לקרוא את הפוסט הזה.</strong> העתיקו את הטקסט של הפוסט והדביקו בתיבה למטה, ו-Recipin יסדר אותו למצרכים ושלבים. אפשר גם לשתף צילום מסך של הפוסט ל-Recipin.`;
+      else if (found) msg = html`<strong>מצאנו את המתכון!</strong> ${r.ingredients.length} מצרכים ו-${nSteps} שלבים. עברו על הפרטים ושמרו.`;
+      else if (res.error) msg = html`<strong>לא הצלחנו לקרוא את האתר</strong> (${res.error}). אפשר לשמור ככרטיס קישור, או להדביק את טקסט המתכון בתיבה למטה.`;
+      else msg = html`<strong>האתר לא מפרסם נתוני מתכון.</strong> נשמור אותו ככרטיס קישור, ואפשר להדביק את טקסט המתכון בתיבה למטה.`;
       render(
         $('#importState'),
         html`<div class="notice ${found ? 'ok' : ''}" style="margin-top:16px">
-          ${icon(found ? 'sparkles' : 'link')}
-          <p>${found
-            ? html`<strong>מצאנו את המתכון!</strong> ${r.ingredients.length} מצרכים ו-${nSteps} שלבים. עברו על הפרטים ושמרו.`
-            : res.error
-              ? html`<strong>לא הצלחנו לקרוא את האתר</strong> (${res.error}). אפשר לשמור ככרטיס קישור ולהשלים בהמשך.`
-              : html`<strong>האתר לא מפרסם נתוני מתכון.</strong> נשמור אותו ככרטיס קישור, ואפשר להדביק כאן את המצרכים וההוראות.`}
+          ${icon(found ? 'sparkles' : ig ? 'camera' : 'link')}
+          <p>${msg}
             ${res.duplicate ? html`<br />כבר יש לך את המתכון הזה: <a href="#/r/${res.duplicate.id}">${res.duplicate.title}</a>` : ''}</p>
-        </div>`,
+        </div>
+        ${found && !ig ? '' : pasteBoxHtml(res.caption || '', !found)}`,
       );
       $('#tips').hidden = true;
-      await mountEditor($('#editorHost'), {
+      const editorBase = {
         kind: 'link',
         title: r.title,
         description: r.description,
@@ -1023,8 +1033,10 @@ function showAddLink(initial) {
         servings: r.servings,
         tags: [...res.autoTags, ...r.suggestedTags],
         autoTags: res.autoTags,
-      });
-      $('#editorHost').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+      };
+      await mountEditor($('#editorHost'), editorBase);
+      bindPasteBox(editorBase, $('#editorHost'));
+      ($('.paste-box[open]') ? $('#importState') : $('#editorHost')).scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
     } catch (err) {
       clearInterval(ticker);
       render($('#importState'), html``);
@@ -1081,8 +1093,62 @@ function showAddPhoto() {
 
 function showAddWrite() {
   document.title = 'כתיבת מתכון · Recipin';
-  render(view, html`<div class="page narrow">${addPageHead('כתיבת מתכון', 'pen-line', 'כתיבה חופשית')}<div id="editorHost"></div></div>`);
-  mountEditor($('#editorHost'), { kind: 'manual' }).then(() => $('#f-title').focus());
+  render(view, html`<div class="page narrow">${addPageHead('כתיבת מתכון', 'pen-line', 'כתיבה חופשית')}${pasteBoxHtml('', false)}<div id="editorHost"></div></div>`);
+  const base = { kind: 'manual' };
+  mountEditor($('#editorHost'), base).then(() => $('#f-title').focus());
+  bindPasteBox(base, $('#editorHost'));
+}
+
+// ---------- "paste recipe text" → organised recipe ----------
+function pasteBoxHtml(prefill, open) {
+  const canPaste = !!navigator.clipboard?.readText;
+  return html`<details class="paste-box" ${raw(open ? 'open' : '')}>
+    <summary>${icon('clipboard-paste', 'sm')}יש לכם את המתכון כטקסט? הדביקו ו-Recipin יסדר אותו</summary>
+    <div class="field" style="margin-top:12px">
+      <label class="sr-only" for="pasteText">טקסט המתכון</label>
+      <textarea id="pasteText" rows="8" placeholder="הדביקו כאן את הטקסט של הפוסט, ההודעה או המתכון…">${prefill}</textarea>
+      <span class="hint">שורות אחרי "מצרכים:" יהפכו למצרכים, ושורות אחרי "אופן ההכנה:" לשלבים. גם בלי כותרות: שורה שמתחילה בכמות היא מצרך, ושורה ממוספרת היא שלב. האשטגים הופכים לתגיות.</span>
+    </div>
+    <div class="cover-actions" style="margin-top:12px">
+      <button type="button" class="btn primary" id="pasteParse">${icon('sparkles', 'sm')}סידור למתכון</button>
+      ${canPaste ? html`<button type="button" class="btn soft" id="pasteClip">${icon('clipboard-paste', 'sm')}הדבקה מהלוח</button>` : ''}
+    </div>
+  </details>`;
+}
+
+function bindPasteBox(base, host) {
+  $('#pasteClip')?.addEventListener('click', async () => {
+    try {
+      $('#pasteText').value = await navigator.clipboard.readText();
+    } catch {
+      toast('אין גישה ללוח. הדביקו ידנית', { error: true });
+    }
+  });
+  $('#pasteParse')?.addEventListener('click', async () => {
+    const text = $('#pasteText').value.trim();
+    if (!text) return $('#pasteText').focus();
+    const p = parseRecipeText(text);
+    const nSteps = p.steps.filter((x) => !x.startsWith('## ')).length;
+    if (!p.ingredients.length && !nSteps) {
+      toast('לא זיהינו מצרכים או שלבים. הוסיפו שורה "מצרכים:" ושורה "אופן ההכנה:"', { error: true });
+      return;
+    }
+    const { tags: auto } = await api('/api/autotags', { method: 'POST', body: { ingredients: p.ingredients } });
+    const kept = (base.tags || []).filter((t) => !(base.autoTags || []).includes(t));
+    Object.assign(base, {
+      title: p.title && (!base.title || /אינסטגרם|Instagram|^מתכון של/.test(base.title)) ? p.title : base.title || p.title,
+      description: p.description || base.description || '',
+      ingredients: p.ingredients,
+      steps: p.steps,
+      servings: p.servings || base.servings || '',
+      tags: [...new Set([...auto, ...p.suggestedTags, ...kept])],
+      autoTags: auto,
+    });
+    await mountEditor(host, base);
+    $('.paste-box')?.removeAttribute('open');
+    toast(`סידרנו ${p.ingredients.length} מצרכים ו-${nSteps} שלבים. בדקו לפני שמירה`, { ic: 'sparkles' });
+    host.scrollIntoView({ block: 'start' });
+  });
 }
 
 async function uploadFiles(files) {
