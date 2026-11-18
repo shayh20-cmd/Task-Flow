@@ -79,3 +79,27 @@ test('post with a story but no written recipe (recipe only in the video)', async
   assert.equal(r.recipe.image, 'https://scontent.cdninstagram.com/v/cover.jpg');
   assert.equal(r.recipe.author, '@cook.story');
 });
+
+for (const [name, parse] of Object.entries(ADAPTERS)) {
+  test(`[${name}] post JSON in the embed page: owner's cover, caption and author`, async () => {
+    const r = await importInstagram('https://www.instagram.com/reel/DfTest123/?evlk=abc', io('ig-embed-context.html', null, parse));
+    assert.equal(r.recipe.image, 'https://scontent.cdninstagram.com/v/user-selected-cover.jpg?stp=dst-jpg_e15');
+    assert.equal(r.recipe.author, '@liza.cooks');
+    assert.equal(r.recipe.title, 'אורז עם עדשים וקישואים');
+    assert.deepEqual(r.recipe.ingredients, ['2 כוסות אורז', 'כרישה קצוצה', 'כפית מלח']);
+    assert.deepEqual(r.recipe.steps, ['מקפיצים ומבשלים 20 דקות.']);
+  });
+}
+
+test('Instagram is asked as Recipin (browser user agents get an empty shell)', async () => {
+  const seen = [];
+  await importInstagram('https://www.instagram.com/p/DAbc123xyz/', {
+    parse: serverDoc,
+    fetchText: async (u, headers) => {
+      seen.push(headers['User-Agent']);
+      throw new Error('blocked');
+    },
+  });
+  assert.ok(seen.length >= 1);
+  for (const ua of seen) assert.match(ua, /^Recipin\//);
+});

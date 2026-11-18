@@ -86,3 +86,28 @@ test('caption without a recipe stays as description', () => {
 test('empty input', () => {
   assert.deepEqual(parseRecipeText(''), { title: '', description: '', ingredients: [], steps: [], servings: '', suggestedTags: [] });
 });
+
+test('"מה צריכים?" header and ingredients without a leading quantity', () => {
+  const r = parseRecipeText(`אורז יווני עם עדשים
+מה צריכים?
+2 כוסות אורז בסמטי
+כרישה קצוצה
+בצל סגול קצוץ
+כפית וחצי מלח
+איך מכינים:
+מקפיצים את הירקות 5 דקות.`);
+  assert.deepEqual(r.ingredients, ['2 כוסות אורז בסמטי', 'כרישה קצוצה', 'בצל סגול קצוץ', 'כפית וחצי מלח']);
+  assert.deepEqual(r.steps, ['מקפיצים את הירקות 5 דקות.']);
+});
+
+test('no ingredients header but a steps header: the quantity block becomes the ingredients', () => {
+  const r = parseRecipeText(`פסטה ברוטב עגבניות. מהיר ומנחם.
+250 גרם פסטה
+3 עגבניות
+שום כתוש
+2 כפות שמן זית
+אופן ההכנה:
+מבשלים את הפסטה.`);
+  assert.equal(r.title, 'פסטה ברוטב עגבניות');
+  assert.deepEqual(r.ingredients, ['250 גרם פסטה', '3 עגבניות', 'שום כתוש', '2 כפות שמן זית']);
+});

@@ -2,7 +2,7 @@
 // { title, description, ingredients, steps, servings, suggestedTags } — rule-based, no AI.
 
 const ING_HEADER =
-  /^(?:ה?מצרכים|ה?מרכיבים|ה?רכיבים|ה?חומרים|מה צריך|מה צריך\?|רשימת קניות|ingredients?|you'?ll need|what you(?:'ll)? need)(?:\s|:|$|\(|ל|-)/i;
+  /^(?:ה?מצרכים|ה?מרכיבים|ה?רכיבים|ה?חומרים|מה (?:צריך|צריכים|צריכות|נצטרך|צריך לקנות)|נצטרך|צריך|רשימת קניות|ingredients?|you'?ll need|what you(?:'ll)? need)(?:\s|:|$|\(|ל|-|\?)/i;
 const STEP_HEADER =
   /^(?:אופן\s*ה?הכנה|דרך\s*ה?הכנה|שלבי\s*ה?הכנה|הוראות(?:\s*הכנה)?|ה?הכנה|איך מכינים|instructions?|method|directions?|preparation|how to(?: make)?|steps?)(?:\s|:|$|\(|-)/i;
 const END_LINE = /^(?:בתיאבון|בהצלחה|שמרו|תשמרו|תייגו|שתפו|לחצו|קישור ב|לינק ב|למתכונים נוספים|enjoy|save this|follow|tag a friend|link in bio)/i;
@@ -125,6 +125,21 @@ export function parseRecipeText(input) {
     }
     intro.length = 0;
     intro.push(...rest);
+  }
+
+  if (!ingredients.length && intro.length > 2) {
+    const isShort = (l) => l.length <= 70 && !/[.!?]$/.test(l);
+    let best = null;
+    for (let i = 0; i < intro.length; i++) {
+      if (!QTY_START.test(intro[i]) || !isShort(intro[i])) continue;
+      let j = i;
+      while (j + 1 < intro.length && isShort(intro[j + 1])) j++;
+      const block = intro.slice(i, j + 1);
+      const qty = block.filter((l) => QTY_START.test(l)).length;
+      if (qty >= 2 && qty >= block.length / 2 && (!best || block.length > best[1] - best[0] + 1)) best = [i, j];
+      i = j;
+    }
+    if (best) ingredients.push(...intro.splice(best[0], best[1] - best[0] + 1));
   }
 
   const titleLine = intro.find((l) => !END_LINE.test(l)) || '';

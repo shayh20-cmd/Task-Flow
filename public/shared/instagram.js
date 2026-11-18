@@ -4,9 +4,9 @@
 // Shared by the server and the Android app; they pass in how to fetch and how to parse HTML.
 import { parseRecipeText, isStoryOnly } from './recipe-text.js';
 
-const MOBILE_UA =
-  'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36';
-const PREVIEW_UA = 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)';
+// Instagram serves the full embed page (caption + the cover the owner picked) to plain clients,
+// but an empty JavaScript shell to browser user agents. So Recipin identifies itself as itself.
+const CLIENT_UA = 'Recipin/0.1 (recipe book app)';
 
 export function instagramPost(url) {
   const m = String(url).match(/instagram\.com\/(?:[\w.]+\/)?(p|reels?|tv)\/([\w-]{5,})/i);
@@ -37,10 +37,22 @@ function biggestFromSrcset(srcset) {
   );
 }
 
+/** The post as JSON inside the embed page ("contextJSON" → gql_data.shortcode_media), if present. */
+function embeddedMedia(html) {
+  const m = html.match(/"contextJSON"\s*:\s*("(?:[^"\\]|\\.)*")/);
+  if (!m) return null;
+  try {
+    return JSON.parse(JSON.parse(m[1]))?.gql_data?.shortcode_media || null;
+  } catch {
+    return null;
+  }
+}
+
 /** Read caption / image / author from the embed page. `doc` = { all(sel), html(node), text(node), attr(node, n) } */
 export function readEmbed(html, doc) {
   let caption = '';
   let author = '';
+  const media = embeddedMedia(html);
   const cap = doc.all('.Caption')[0];
   if (cap) {
     const user = doc.all('.CaptionUsername')[0];
@@ -50,8 +62,10 @@ export function readEmbed(html, doc) {
     inner = inner.replace(/<div[^>]*class="[^"]*CaptionComments[^"]*"[\s\S]*$/i, '');
     caption = decode(inner).trim();
   }
+  if (!caption && media) caption = media.edge_media_to_caption?.edges?.[0]?.node?.text || '';
+  if (!author && media) author = media.owner?.username || '';
   if (!caption) {
-    // Newer embeds carry the post as JSON inside a script.
+    // Older embeds carry the post as JSON inside a script.
     const m = html.match(/"edge_media_to_caption"\s*:\s*\{\s*"edges"\s*:\s*\[\s*\{\s*"node"\s*:\s*\{\s*"text"\s*:\s*("(?:[^"\\]|\\.)*")/);
     if (m) {
       try {
@@ -65,8 +79,9 @@ export function readEmbed(html, doc) {
     const u = doc.all('.UsernameText')[0] || doc.all('.Username')[0];
     author = u ? doc.text(u).trim() : '';
   }
-  let image = '';
-  const img = doc.all('img.EmbeddedMediaImage')[0];
+  // display_url is the full-size cover the owner picked (for reels: the selected thumbnail)
+  let image = media?.display_url || '';
+  const img = image ? null : doc.all('img.EmbeddedMediaImage')[0];
   if (img) image = biggestFromSrcset(doc.attr(img, 'srcset')) || doc.attr(img, 'src') || '';
   if (!image) {
     const m = html.match(/"display_url"\s*:\s*("(?:[^"\\]|\\.)*")/);
@@ -116,7 +131,7 @@ export async function importInstagram(url, { fetchText, parse }) {
 
   if (post) {
     try {
-      const html = await fetchText(`https://www.instagram.com/p/${post.code}/embed/captioned/`, { 'User-Agent': MOBILE_UA });
+      const html = await fetchText(`https://www.instagram.com/p/${post.code}/embed/captioned/`, { 'User-Agent': CLIENT_UA });
       got = readEmbed(html, parse(html));
     } catch (e) {
       errors.push(e.message);
@@ -124,7 +139,7 @@ export async function importInstagram(url, { fetchText, parse }) {
   }
   if (!got.caption || !got.image) {
     try {
-      const html = await fetchText(canonical, { 'User-Agent': PREVIEW_UA });
+      const html = await fetchText(canonical, { 'User-Agent': CLIENT_UA });
       const prev = readPreview(parse(html).meta);
       got = { caption: got.caption || prev.caption, author: got.author || prev.author, image: got.image || prev.image };
     } catch (e) {
