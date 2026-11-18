@@ -595,7 +595,11 @@ async function showRecipe(id) {
       <section class="r-sheet">
         ${k ? html`<span class="kosher ${KOSHER[k]}" style="box-shadow:none;background:var(--surface-2);margin-bottom:10px">${k}</span>` : ''}
         <h1>${r.title}</h1>
-        ${r.description ? html`<p class="desc">${r.description}</p>` : ''}
+        ${r.description
+          ? r.description.length > 320
+            ? html`<p class="desc clamp" id="desc">${r.description}</p><button class="link-btn more" id="descMore" aria-expanded="false">המשך קריאה</button>`
+            : html`<p class="desc">${r.description}</p>`
+          : ''}
         ${source || r.author
           ? html`<div class="r-meta">
               ${source ? html`<a class="src-chip" href="${source}" target="_blank" rel="noopener noreferrer">${icon('external-link', 'sm')}${r.sourceName || hostOf(source)}</a>` : ''}
@@ -609,7 +613,7 @@ async function showRecipe(id) {
         <div class="r-cta">
           ${realSteps.length ? html`<button class="btn primary big" id="cookBtn">${icon('chef-hat')}מצב בישול</button>` : ''}
           ${linkOnly && source
-            ? html`<a class="btn primary big" href="${source}" target="_blank" rel="noopener noreferrer">${icon('external-link')}פתיחת המתכון באתר</a>`
+            ? html`<a class="btn primary big" href="${source}" target="_blank" rel="noopener noreferrer">${icon('external-link')}${/instagram\.com/i.test(source) ? 'פתיחת הפוסט באינסטגרם' : 'פתיחת המתכון באתר'}</a>`
             : ''}
         </div>
       </section>
@@ -659,6 +663,12 @@ async function showRecipe(id) {
         : ''}
     </article>`,
   );
+
+  $('#descMore')?.addEventListener('click', (e) => {
+    const open = $('#desc').classList.toggle('clamp');
+    e.currentTarget.textContent = open ? 'המשך קריאה' : 'הצגת פחות';
+    e.currentTarget.setAttribute('aria-expanded', String(!open));
+  });
 
   // numbering for step buttons (continues across sections)
   $$('.step .num').forEach((b, i) => {
@@ -1000,6 +1010,8 @@ function showAddLink(initial) {
       let msg;
       if (ig && hasRecipe)
         msg = html`<strong>קראנו את הפוסט מאינסטגרם:</strong> ${r.ingredients.length} מצרכים ו-${nSteps} שלבים. בפוסטים הכתיבה חופשית, אז כדאי לעבור על הפרטים לפני שמירה.`;
+      else if (ig && res.storyOnly)
+        msg = html`<strong>שמרנו את הפוסט עם התמונה והטקסט, אבל בטקסט של הפוסט הזה אין מתכון כתוב</strong> (כנראה המתכון מופיע רק בסרטון). אפשר להוסיף את המצרכים והשלבים בעצמכם, או להדביק אותם בתיבה למטה.`;
       else if (ig && res.caption)
         msg = html`<strong>קיבלנו את הטקסט של הפוסט, אבל לא זיהינו בו מצרכים ושלבים.</strong> הטקסט מופיע למטה: אפשר לסדר אותו (למשל להוסיף שורה "מצרכים:" ושורה "אופן ההכנה:") וללחוץ "סידור למתכון".`;
       else if (ig)
@@ -1014,7 +1026,7 @@ function showAddLink(initial) {
           <p>${msg}
             ${res.duplicate ? html`<br />כבר יש לך את המתכון הזה: <a href="#/r/${res.duplicate.id}">${res.duplicate.title}</a>` : ''}</p>
         </div>
-        ${found && !ig ? '' : pasteBoxHtml(res.caption || '', !found)}`,
+        ${found && !ig ? '' : res.storyOnly ? pasteBoxHtml('', false) : pasteBoxHtml(res.caption || '', !found)}`,
       );
       $('#tips').hidden = true;
       const editorBase = {

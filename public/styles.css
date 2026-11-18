@@ -717,3 +717,8 @@ dialog::backdrop { background: var(--scrim); backdrop-filter: blur(3px); }
 .paste-box summary::-webkit-details-marker { display: none; }
 .paste-box summary::after { content: '+'; margin-inline-start: auto; font-size: 1.3rem; color: var(--ink-2); }
 .paste-box[open] summary::after { content: '–'; }
+
+.r-sheet .desc { white-space: pre-line; }
+.r-sheet .desc.clamp { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.r-sheet .more { padding: 6px 0; min-height: 44px; font-weight: 700; }
+.link-btn { background: none; border: 0; color: var(--primary-ink); font: inherit; font-weight: 700; cursor: pointer; padding: 8px 0; min-height: 44px; }

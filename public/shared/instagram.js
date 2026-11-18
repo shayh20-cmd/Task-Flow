@@ -2,7 +2,7 @@
 // public routes in order: (1) the post's "embed/captioned" page, (2) Open Graph tags served to
 // link-preview crawlers. The caption is then turned into a recipe by parseRecipeText.
 // Shared by the server and the Android app; they pass in how to fetch and how to parse HTML.
-import { parseRecipeText } from './recipe-text.js';
+import { parseRecipeText, isStoryOnly } from './recipe-text.js';
 
 const MOBILE_UA =
   'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36';
@@ -134,14 +134,17 @@ export async function importInstagram(url, { fetchText, parse }) {
 
   const parsed = parseRecipeText(got.caption);
   const found = parsed.ingredients.length || parsed.steps.length;
+  const fullText = got.caption.replace(/(^|\s)#[\p{L}\p{N}_]+/gu, '$1').replace(/\n{3,}/g, '\n\n').trim();
   return {
     method: got.caption ? 'instagram' : 'link',
     source: 'instagram',
     caption: got.caption,
+    // the post has text but no written recipe (e.g. the recipe is only in the video)
+    storyOnly: !!got.caption && !found && isStoryOnly(got.caption),
     error: got.caption ? undefined : 'אינסטגרם לא מאפשר לקרוא את הפוסט הזה',
     recipe: {
       title: parsed.title || (got.author ? `מתכון של ${got.author}` : 'מתכון מאינסטגרם'),
-      description: found ? parsed.description : parsed.description || '',
+      description: found ? parsed.description : fullText.slice(0, 5000),
       image: got.image,
       author: got.author ? '@' + got.author.replace(/^@/, '') : '',
       sourceUrl: canonical,

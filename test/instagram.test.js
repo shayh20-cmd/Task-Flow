@@ -63,3 +63,19 @@ for (const [name, parse] of Object.entries(ADAPTERS)) {
     assert.equal(r.recipe.sourceName, 'Instagram');
   });
 }
+
+test('post with a story but no written recipe (recipe only in the video)', async () => {
+  const story = `<html><body><div class="Caption"><a class="CaptionUsername">cook.story</a><br>הכנתי קציצות דלעת מתקתקות, בניסיון להחזיר טעם של בית למטבח שלי.<br>המתכון הזה מלווה אותי שנים, מאז שקניתי את הספר הראשון שלה.<br>היום סוף סוף בישלנו יחד.<div class="CaptionComments">View all 506 comments</div></div>
+  <img class="EmbeddedMediaImage" src="https://scontent.cdninstagram.com/v/cover.jpg"></body></html>`;
+  const r = await importInstagram('https://www.instagram.com/reel/DfblvmHR-48/?bqrl=xyz', {
+    parse: serverDoc,
+    fetchText: async (u) => (u.includes('/embed/') ? story : Promise.reject(new Error('blocked'))),
+  });
+  assert.equal(r.method, 'instagram');
+  assert.equal(r.storyOnly, true);
+  assert.equal(r.recipe.title, 'הכנתי קציצות דלעת מתקתקות');
+  assert.deepEqual(r.recipe.ingredients, []);
+  assert.match(r.recipe.description, /היום סוף סוף בישלנו יחד/);
+  assert.equal(r.recipe.image, 'https://scontent.cdninstagram.com/v/cover.jpg');
+  assert.equal(r.recipe.author, '@cook.story');
+});

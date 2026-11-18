@@ -42,8 +42,17 @@ function shortTitle(line) {
   let t = line.replace(/\s*[:–-]\s*$/, '');
   const cut = t.search(/[.!?](\s|$)/);
   if (cut > 8) t = t.slice(0, cut);
-  if (t.length > 80) t = t.slice(0, 77).replace(/\s+\S*$/, '') + '…';
-  return t;
+  if (t.length > 60) {
+    // a long opening sentence: keep its first clause
+    const clause = t.slice(15, 61).search(/[,،;]|\s[-–]\s/);
+    t = clause >= 0 ? t.slice(0, clause + 15) : t.slice(0, 58).replace(/\s+\S*$/, '') + '…';
+  }
+  return t.trim();
+}
+
+/** True when the text has no sign of a written recipe (no quantities or units anywhere). */
+export function isStoryOnly(text) {
+  return !/(\d|[½¼¾⅓⅔]|חצי|רבע)\s*(כוס|כוסות|כף|כפות|כפית|כפיות|גרם|ג'|ק"ג|קילו|מ"ל|ליטר|יחידות|ביצים|cups?|tbsp|tsp|g\b|grams?|ml\b|oz\b)/i.test(text || '');
 }
 
 function findServings(text) {
