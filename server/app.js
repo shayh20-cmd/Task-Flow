@@ -6,7 +6,7 @@ import { join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openDb } from './db.js';
 import { extractFromUrl, extractFromHtml } from './extract.js';
-import { autoTags } from './autotag.js';
+import { autoTags } from '../public/shared/autotag.js';
 import { safeFetch } from './net.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));

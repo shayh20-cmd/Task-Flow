@@ -11,6 +11,12 @@ const SHARE_TOKEN = (location.pathname.match(/^\/s\/([\w-]+)/) || [])[1] || null
 const READONLY = !!SHARE_TOKEN;
 document.body.classList.toggle('readonly', READONLY);
 
+// Android app mode: no server, everything is stored on the phone (local-api.js).
+// In a desktop browser, add ?app to the address to try the same mode.
+const APP = window.RECIPIN_MODE === 'app' || new URLSearchParams(location.search).has('app');
+const native = () => (window.RecipinNative?.isNative ? window.RecipinNative : null);
+document.body.classList.toggle('app-mode', APP);
+
 // ---------- templating ----------
 const RAW = Symbol('raw');
 const raw = (s) => ({ [RAW]: String(s) });
@@ -27,9 +33,18 @@ function html(strings, ...vals) {
 }
 const render = (el, h) => (el.innerHTML = h[RAW]);
 const icon = (name, cls = '') => raw(`<svg class="ic ${cls}" aria-hidden="true"><use href="/icons.svg#i-${name}"/></svg>`);
-const safeUrl = (u) => (/^(https?:\/\/|\/uploads\/)/i.test(u || '') ? u : '');
+const safeUrl = (u) => (/^(https?:\/\/|\/uploads\/|blob:|data:image\/)/i.test(u || '') ? u : '');
 
 async function api(path, { method = 'GET', body, form } = {}) {
+  if (APP) {
+    const { localApi } = await import('./local-api.js');
+    try {
+      const r = await localApi(path, { method, body, form });
+      return r == null ? null : JSON.parse(JSON.stringify(r));
+    } catch (e) {
+      throw new Error(e.message || 'שגיאה');
+    }
+  }
   const opts = { method, headers: {} };
   if (form) opts.body = form;
   else if (body !== undefined) {
@@ -159,6 +174,7 @@ async function route() {
     else if (parts[0] === 'import') return location.replace('#/add/link?url=' + encodeURIComponent(params.get('url') || ''));
     else if (parts[0] === 'r' && parts[2] === 'edit') await showEditPage(Number(parts[1]));
     else if (parts[0] === 'r') await showRecipe(Number(parts[1]));
+    else if (parts[0] === 'settings' || (APP && parts[0] === 'shares')) await showSettings();
     else if (parts[0] === 'shares') await showShares();
     else await showHome();
   } catch (e) {
@@ -179,6 +195,8 @@ const NAV = [
   { href: '#/fav', key: 'fav', label: 'מועדפים', ic: 'heart' },
   { href: '#/shares', key: 'shares', label: 'שיתופים', ic: 'share-2' },
 ];
+const navItems = () =>
+  APP ? NAV.map((n) => (n.key === 'shares' ? { href: '#/settings', key: 'settings', label: 'הגדרות', ic: 'settings' } : n)) : NAV;
 function renderChrome(parts) {
   const key = parts[0] === 'c' ? 'collections' : parts[0] === 'import' ? 'add' : parts[0] || '';
   const cur = (k) => raw(k === key ? 'aria-current="page"' : '');
@@ -192,13 +210,13 @@ function renderChrome(parts) {
   }
   render(
     $('#topnav'),
-    html`${NAV.filter((n) => !n.fab).map((n) => html`<a href="${n.href}" ${cur(n.key)}>${icon(n.ic)}${n.label}</a>`)}`,
+    html`${navItems().filter((n) => !n.fab).map((n) => html`<a href="${n.href}" ${cur(n.key)}>${icon(n.ic)}${n.label}</a>`)}`,
   );
   render($('#topCta'), html`<button class="btn round quiet" id="themeBtn" aria-label="צבעי הספר">${icon('palette')}</button><a class="btn primary hide-m" href="#/add">${icon('plus')}תיוק מתכון</a>`);
   $('#themeBtn').onclick = themeDialog;
   render(
     $('#tabbar'),
-    html`${NAV.map((n) =>
+    html`${navItems().map((n) =>
       n.fab
         ? html`<a class="fab" href="${n.href}" aria-label="תיוק מתכון חדש" ${cur(n.key)}>${icon(n.ic)}</a>`
         : html`<a href="${n.href}" ${cur(n.key)}>${icon(n.ic)}<span>${n.label}</span></a>`,
@@ -433,7 +451,7 @@ async function showList(ctx) {
         ${col
           ? html`<div class="actions">
               <button class="btn quiet" id="editCol">${icon('pencil', 'sm')}עריכה</button>
-              <button class="btn primary" id="shareCol">${icon('share-2', 'sm')}שיתוף האוסף</button>
+              ${APP ? '' : html`<button class="btn primary" id="shareCol">${icon('share-2', 'sm')}שיתוף האוסף</button>`}
             </div>`
           : ''}
       </div>
@@ -446,7 +464,7 @@ async function showList(ctx) {
   );
   if (col) {
     $('#editCol').onclick = () => collectionDialog(col);
-    $('#shareCol').onclick = () => shareDialog('collection', col.id, col.name, 'layers-2');
+    $('#shareCol')?.addEventListener('click', () => shareDialog('collection', col.id, col.name, 'layers-2'));
   }
   bindGrid();
   await loadGrid();
@@ -460,7 +478,7 @@ async function showCollections() {
     html`<div class="page">
       <div class="page-head">
         <div><div class="eyebrow">${icon('layers-2', 'sm')}מסודר ונקי</div><h1>האוספים שלי</h1></div>
-        <div class="actions"><button class="btn quiet" id="shareBook">${icon('share-2', 'sm')}שיתוף כל הספר</button><button class="btn primary" id="newCol">${icon('folder-plus', 'sm')}אוסף חדש</button></div>
+        <div class="actions">${APP ? '' : html`<button class="btn quiet" id="shareBook">${icon('share-2', 'sm')}שיתוף כל הספר</button>`}<button class="btn primary" id="newCol">${icon('folder-plus', 'sm')}אוסף חדש</button></div>
       </div>
       ${state.collections.length
         ? html`<div class="albums">${state.collections.map(albumHtml)}</div>`
@@ -469,7 +487,7 @@ async function showCollections() {
   );
   $('#newCol').onclick = () => collectionDialog();
   $('#newCol2')?.addEventListener('click', () => collectionDialog());
-  $('#shareBook').onclick = () => shareDialog('book', null, 'כל ספר המתכונים', 'book-open');
+  $('#shareBook')?.addEventListener('click', () => shareDialog('book', null, 'כל ספר המתכונים', 'book-open'));
 }
 
 async function showSharedHome() {
@@ -715,7 +733,7 @@ async function showRecipe(id) {
     await api(`/api/recipes/${r.id}`, { method: 'PUT', body: { favorite: fav } });
     toast(fav ? 'נשמר במועדפים' : 'הוסר מהמועדפים', { ic: 'heart' });
   };
-  $('#shareBtn').onclick = () => shareDialog('recipe', r.id, r.title, 'utensils-crossed');
+  $('#shareBtn').onclick = () => (APP ? shareRecipeText(r) : shareDialog('recipe', r.id, r.title, 'utensils-crossed'));
 }
 
 // ---------- cooking mode ----------
@@ -918,17 +936,20 @@ function showAddLink(initial) {
         <div id="importState"></div>
       </form>
       <div id="editorHost"></div>
-      <div class="tips" id="tips">
+      ${APP
+        ? html`<div class="tips" id="tips"><div class="tip" style="grid-column:1/-1"><strong>${icon('share-2', 'sm')}תיוק בלחיצה מכל אפליקציה</strong>
+            <p>בכרום, באינסטגרם או בוואטסאפ: לוחצים "שיתוף" ובוחרים Recipin. הקישור ייפתח כאן מוכן לשמירה. גם צילום מסך של מתכון אפשר לשתף ישר לכאן.</p></div></div>`
+        : html`<div class="tips" id="tips">
         <div class="tip"><strong>${icon('bookmark', 'sm')}תיוק בלחיצה מהמחשב</strong>
           <p>גררו את הכפתור לסרגל הסימניות. בדף של מתכון, לחיצה עליו תפתח אותו כאן מוכן לשמירה.</p>
           <p style="margin-top:10px"><a class="btn soft" id="bookmarklet" href="#">${icon('bookmark', 'sm')}שמירה ל-Recipin</a></p></div>
         <div class="tip"><strong>${icon('share-2', 'sm')}תיוק מהטלפון</strong>
           <p>באנדרואיד: התקינו את Recipin למסך הבית מתפריט הדפדפן. אחרי זה הוא יופיע בתפריט "שיתוף" של כל אפליקציה.</p></div>
-      </div>
+      </div>`}
     </div>`,
   );
-  $('#bookmarklet').href = `javascript:location.href=${JSON.stringify(location.origin + '/#/add/link?url=')}+encodeURIComponent(location.href)`;
-  $('#bookmarklet').onclick = (e) => {
+  if ($('#bookmarklet')) $('#bookmarklet').href = `javascript:location.href=${JSON.stringify(location.origin + '/#/add/link?url=')}+encodeURIComponent(location.href)`;
+  if ($('#bookmarklet')) $('#bookmarklet').onclick = (e) => {
     e.preventDefault();
     toast('גררו את הכפתור לסרגל הסימניות', { ic: 'bookmark' });
   };
@@ -1047,6 +1068,7 @@ function showAddPhoto() {
     }
   };
   input.onchange = () => handle([...input.files]);
+  if (pendingSharedFiles.length) handle(pendingSharedFiles.splice(0));
   const drop = $('#drop');
   drop.ondragover = (e) => (e.preventDefault(), drop.classList.add('over'));
   drop.ondragleave = () => drop.classList.remove('over');
@@ -1473,6 +1495,151 @@ async function showShares() {
   );
 }
 
+
+// ---------- app mode: native share, share-target, back button, settings ----------
+let pendingSharedFiles = [];
+
+function recipeAsText(r) {
+  const lines = [r.title];
+  if (r.servings) lines.push(`כמות: ${r.servings}`);
+  if (r.totalMinutes) lines.push(`זמן: ${fmtMinutes(r.totalMinutes)}`);
+  if (r.ingredients.length) {
+    lines.push('', 'מצרכים:');
+    for (const i of r.ingredients) lines.push(i.startsWith('## ') ? `\n${i.slice(3)}:` : `• ${i}`);
+  }
+  if (r.steps.length) {
+    lines.push('', 'אופן ההכנה:');
+    let n = 0;
+    for (const st of r.steps) lines.push(st.startsWith('## ') ? `\n${st.slice(3)}:` : `${++n}. ${st}`);
+  }
+  if (r.sourceUrl) lines.push('', `מקור: ${r.sourceUrl}`);
+  lines.push('', 'נשלח מ-Recipin');
+  return lines.join('\n');
+}
+
+async function shareRecipeText(r) {
+  const text = recipeAsText(r);
+  try {
+    if (native()) await native().share({ title: r.title, text });
+    else if (navigator.share) await navigator.share({ title: r.title, text });
+    else {
+      await navigator.clipboard.writeText(text);
+      toast('המתכון הועתק, אפשר להדביק בוואטסאפ', { ic: 'copy' });
+    }
+  } catch {
+    /* user closed the share sheet */
+  }
+}
+
+function setupNative() {
+  const n = native();
+  if (!n) return;
+  n.onShare(async (ev) => {
+    const texts = (ev.texts || []).join(' ');
+    const url = (texts.match(/https?:\/\/\S+/) || [])[0];
+    const images = (ev.files || []).filter((f) => (f.mimeType || '').startsWith('image/'));
+    if (url) {
+      location.hash = '#/add/link?url=' + encodeURIComponent(url);
+    } else if (images.length) {
+      const files = [];
+      for (const f of images) {
+        try {
+          const blob = await (await fetch(n.fileSrc(f.uri))).blob();
+          files.push(new File([blob], f.name || 'shared.jpg', { type: f.mimeType || blob.type }));
+        } catch {
+          /* unreadable file */
+        }
+      }
+      pendingSharedFiles = files;
+      if (location.hash === '#/add/photo') route();
+      else location.hash = '#/add/photo';
+    } else if (texts) {
+      toast('לא נמצא קישור בטקסט ששותף', { error: true });
+    }
+  });
+  n.onBack((ev) => {
+    if (dialog.open) return dialog.close();
+    if (!$('#cook').hidden) return closeCook();
+    if (ev.canGoBack && location.hash && location.hash !== '#/') return history.back();
+    n.exitApp();
+  });
+}
+
+function downloadInBrowser(name, text) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+async function showSettings() {
+  document.title = 'הגדרות · Recipin';
+  const local = APP ? await import('./local-api.js') : null;
+  const st = local ? await local.stats() : null;
+  const mb = st ? (st.bytes / 1048576).toFixed(1) : 0;
+  render(
+    view,
+    html`<div class="page narrow">
+      <div class="page-head"><div><div class="eyebrow">${icon('settings', 'sm')}הגדרות</div><h1>הספר שלי</h1></div></div>
+      ${st
+        ? html`<div class="stats" style="margin-top:0">
+            <div class="stat">${icon('book-open', 'lg')}<div><b>${st.recipes}</b><span>מתכונים</span></div></div>
+            <div class="stat">${icon('layers-2', 'lg')}<div><b>${st.collections}</b><span>אוספים</span></div></div>
+            <div class="stat">${icon('image-plus', 'lg')}<div><b>${st.images}</b><span>תמונות · ${mb}MB</span></div></div>
+          </div>`
+        : ''}
+      <section class="ed-card" style="margin-top:24px">
+        <h2>${icon('palette')}מראה</h2>
+        <p class="muted">שישה סגנונות צבע לבחירה. הבחירה נשמרת במכשיר.</p>
+        <button class="btn soft" id="pickTheme" style="align-self:flex-start">${icon('palette', 'sm')}בחירת צבעים</button>
+      </section>
+      ${APP
+        ? html`<section class="ed-card" style="margin-top:16px">
+            <h2>${icon('hard-drive')}גיבוי</h2>
+            <p class="muted">כל המתכונים והתמונות שמורים רק בטלפון הזה. כדאי לשמור גיבוי מדי פעם, למשל ב-Google Drive או בוואטסאפ לעצמך. גיבוי עוזר גם במעבר לטלפון חדש.</p>
+            <div class="cover-actions">
+              <button class="btn primary" id="doBackup">${icon('download', 'sm')}שמירת גיבוי</button>
+              <label class="btn soft">${icon('upload', 'sm')}שחזור מגיבוי<input type="file" accept="application/json,.json" id="restoreFile" class="sr-only" /></label>
+            </div>
+            <p class="helper">שחזור מחליף את כל מה שיש כרגע במכשיר בתוכן של קובץ הגיבוי.</p>
+          </section>`
+        : ''}
+      <p class="muted small" style="margin-top:24px;text-align:center">Recipin · ספר המתכונים שלך</p>
+    </div>`,
+  );
+  $('#pickTheme').onclick = themeDialog;
+  $('#doBackup')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try {
+      const data = JSON.stringify(await local.exportBackup());
+      const name = `recipin-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      if (native()) await native().saveFile(name, data);
+      else downloadInBrowser(name, data);
+      toast('הגיבוי מוכן', { ic: 'download' });
+    } catch (err) {
+      if (!/cancel/i.test(err.message || '')) toast(err.message || 'הגיבוי נכשל', { error: true });
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  $('#restoreFile')?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      if (!confirm(`לשחזר ${data.recipes?.length ?? 0} מתכונים מהגיבוי? מה שיש כרגע במכשיר יוחלף.`)) return;
+      const res = await local.restoreBackup(data);
+      toast(`שוחזרו ${res.recipes} מתכונים`, { ic: 'upload' });
+      showSettings();
+    } catch (err) {
+      toast(err instanceof SyntaxError ? 'הקובץ אינו גיבוי תקין' : err.message, { error: true });
+    }
+  });
+}
+
 // ---------- boot ----------
-if ('serviceWorker' in navigator && !READONLY) navigator.serviceWorker.register('/sw.js').catch(() => {});
+if ('serviceWorker' in navigator && !READONLY && !APP) navigator.serviceWorker.register('/sw.js').catch(() => {});
+if (APP) setupNative();
 route();

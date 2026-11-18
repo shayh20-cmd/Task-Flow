@@ -1,0 +1,73 @@
+# Builds the Recipin Android app (APK) on every push and publishes it as a GitHub Release,
+# so it can be downloaded straight to the phone from the repository's Releases page.
+name: Android app
+
+on:
+  push:
+    branches: [main, ccr-f61b4c77-n2o2x9]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Tests
+        run: npm test
+
+      - name: Build app web bundle and sync Android project
+        run: |
+          node scripts/build-app.mjs
+          npx cap sync android
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Build APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Name the APK
+        run: |
+          mkdir -p out
+          cp android/app/build/outputs/apk/debug/app-debug.apk "out/Recipin-0.1.${{ github.run_number }}.apk"
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Recipin-apk
+          path: out/*.apk
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-v0.1.${{ github.run_number }}
+          name: Recipin לאנדרואיד 0.1.${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          files: out/*.apk
+          body: |
+            להתקנה: מורידים את קובץ ה-APK למטה בטלפון ופותחים אותו.
+            בפעם הראשונה אנדרואיד יבקש לאשר התקנה ממקור לא מוכר (מהדפדפן). מאשרים פעם אחת.
+            עדכון: מתקינים את הגרסה החדשה על הישנה, והמתכונים נשמרים.

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { autoTags } from '../server/autotag.js';
+import { autoTags } from '../public/shared/autotag.js';
 
 const tags = (ingredients, totalMinutes) => autoTags({ ingredients, totalMinutes });
 

@@ -193,7 +193,7 @@ button { font: inherit; color: inherit; }
 .topbar {
   position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; gap: var(--s-5);
-  padding: 12px max(20px, env(safe-area-inset-right)) 12px max(20px, env(safe-area-inset-left));
+  padding: max(12px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) 12px max(20px, env(safe-area-inset-left));
   background: color-mix(in srgb, var(--bg) 86%, transparent);
   backdrop-filter: saturate(1.4) blur(14px); -webkit-backdrop-filter: saturate(1.4) blur(14px);
 }
@@ -213,7 +213,7 @@ button { font: inherit; color: inherit; }
 .tabbar { display: none; }
 @media (max-width: 760px) {
   .topnav, .top-cta .hide-m { display: none; }
-  .topbar { padding-block: 8px; }
+  .topbar { padding-top: max(8px, env(safe-area-inset-top)); padding-bottom: 8px; }
   .tabbar {
     position: fixed; inset-inline: 12px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 30;
     display: grid; grid-template-columns: repeat(5, 1fr); align-items: center;
