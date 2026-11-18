@@ -84,8 +84,8 @@
 [data-theme='minimal'] .topnav a[aria-current='page'] { box-shadow: none; background: var(--ink); color: var(--bg); }
 @media (max-width: 760px) {
   [data-theme='minimal'] .tabbar { box-shadow: 0 10px 30px -12px rgb(29 28 26 / 25%); border: 1px solid var(--line); background: var(--surface); }
-  [data-theme='minimal'] .tabbar a[aria-current='page'] { background: transparent; color: var(--ink); }
-  [data-theme='minimal'] .tabbar a[aria-current='page']::after { content: ''; width: 4px; height: 4px; border-radius: 50%; background: var(--ink); }
+  [data-theme='minimal'] .tabbar a[aria-current='page']:not(.fab) { background: transparent; color: var(--ink); }
+  [data-theme='minimal'] .tabbar a[aria-current='page']:not(.fab)::after { content: ''; width: 4px; height: 4px; border-radius: 50%; background: var(--ink); }
   [data-theme='minimal'] .tabbar a.fab { box-shadow: 0 0 0 5px var(--bg); border-radius: 50%; }
   [data-theme='minimal'] .tabbar a.fab::after { display: none; }
 }
