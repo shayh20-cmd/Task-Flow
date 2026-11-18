@@ -722,3 +722,19 @@ dialog::backdrop { background: var(--scrim); backdrop-filter: blur(3px); }
 .r-sheet .desc.clamp { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .r-sheet .more { padding: 6px 0; min-height: 44px; font-weight: 700; }
 .link-btn { background: none; border: 0; color: var(--primary-ink); font: inherit; font-weight: 700; cursor: pointer; padding: 8px 0; min-height: 44px; }
+.tag-row { display: flex; gap: var(--s-2); align-items: stretch; }
+.tag-row .tag-input { flex: 1; min-width: 0; }
+.tag-row .btn { flex: none; }
+
+/* ---------- long-press menu ---------- */
+.card { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.card.pressing { transform: scale(0.97); transition-duration: 300ms; }
+.menu-head { display: flex; align-items: center; gap: var(--s-3); }
+.menu-head img, .menu-head .bubble { width: 56px; height: 56px; border-radius: 14px; object-fit: cover; flex: none; }
+.menu-head .bubble { display: grid; place-items: center; background: var(--primary-soft); color: var(--primary-ink); }
+.menu-head strong { display: block; font-family: var(--font-display); font-size: 1.1rem; line-height: 1.25; }
+.menu-list { display: flex; flex-direction: column; border-radius: var(--r-lg); background: var(--surface-2); overflow: hidden; }
+.menu-list button { display: flex; align-items: center; gap: var(--s-3); min-height: 56px; padding: 0 var(--s-4); border: 0; background: transparent; font-weight: 600; font-size: 1.02rem; text-align: start; cursor: pointer; }
+.menu-list button + button { border-top: 1px solid var(--line); }
+.menu-list button:active { background: var(--line); }
+.menu-list button.danger { color: var(--danger); }

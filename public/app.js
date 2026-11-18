@@ -255,7 +255,7 @@ function cardHtml(r, i = 0) {
   const k = kosherOf(r);
   const linkOnly = r.kind === 'link' && !r.ingredients.length;
   const extra = r.tags.filter((t) => !KOSHER[t] && !r.autoTags.includes(t)).slice(0, 3);
-  return html`<article class="card ${READONLY ? '' : 'has-fav'}" style="--i:${Math.min(i, 12)}">
+  return html`<article class="card ${READONLY ? '' : 'has-fav'}" data-id="${r.id}" style="--i:${Math.min(i, 12)}">
     <a href="#/r/${r.id}" aria-label="${r.title}">
       <div class="media">
         ${img ? html`<img src="${img}" alt="" loading="lazy" decoding="async" onerror="this.hidden=true" />` : placeholder(r.title)}
@@ -352,7 +352,112 @@ async function loadGrid() {
   render(grid, html`${recipes.map((r, i) => cardHtml(r, i))}`);
 }
 
+function bindLongPress(grid) {
+  let timer = null;
+  let start = null;
+  let fired = false;
+  const cardOf = (e) => e.target.closest('.card');
+  const cancel = () => {
+    clearTimeout(timer);
+    start = null;
+    $$('.card.pressing', grid).forEach((c) => c.classList.remove('pressing'));
+  };
+  const open = (card) => {
+    cancel();
+    fired = true;
+    navigator.vibrate?.(15);
+    cardMenu(Number(card.dataset.id));
+  };
+  grid.addEventListener('pointerdown', (e) => {
+    const card = cardOf(e);
+    if (!card || e.target.closest('[data-fav]') || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    fired = false;
+    start = { x: e.clientX, y: e.clientY };
+    card.classList.add('pressing');
+    timer = setTimeout(() => open(card), 480);
+  });
+  grid.addEventListener('pointermove', (e) => {
+    if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) cancel();
+  });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) => grid.addEventListener(ev, () => clearTimeout(timer) || cancel()));
+  // Android fires contextmenu on long press, desktops on right click: show our menu instead of the browser's
+  grid.addEventListener('contextmenu', (e) => {
+    const card = cardOf(e);
+    if (!card) return;
+    e.preventDefault();
+    if (!fired) open(card);
+  });
+  // the click that ends a long press must not open the recipe
+  grid.addEventListener(
+    'click',
+    (e) => {
+      if (fired && cardOf(e)) {
+        e.preventDefault();
+        e.stopPropagation();
+        fired = false;
+      }
+    },
+    true,
+  );
+}
+
+async function cardMenu(id) {
+  let r;
+  try {
+    r = await api(`/api/recipes/${id}`);
+  } catch (e) {
+    return toast(e.message, { error: true });
+  }
+  const cover = safeUrl(r.cover);
+  openDialog(
+    html`<div class="dlg">
+      <div class="menu-head">
+        ${cover ? html`<img src="${cover}" alt="" />` : html`<span class="bubble">${icon('cooking-pot')}</span>`}
+        <div><strong>${r.title}</strong>${r.sourceName ? html`<span class="muted small">${r.sourceName}</span>` : ''}</div>
+      </div>
+      <div class="menu-list" role="menu">
+        <button role="menuitem" data-act="open">${icon('book-open')}פתיחה</button>
+        <button role="menuitem" data-act="edit">${icon('pencil')}עריכה ותגיות</button>
+        <button role="menuitem" data-act="fav">${icon('heart', r.favorite ? 'fill' : '')}${r.favorite ? 'הסרה מהמועדפים' : 'הוספה למועדפים'}</button>
+        <button role="menuitem" data-act="share">${icon('share-2')}שיתוף</button>
+        <button role="menuitem" data-act="delete" class="danger">${icon('trash-2')}מחיקה</button>
+      </div>
+      <button class="btn quiet block" data-close>ביטול</button>
+    </div>`,
+    () => {
+      $('.menu-list', dialog).onclick = async (e) => {
+        const act = e.target.closest('[data-act]')?.dataset.act;
+        if (!act) return;
+        if (act === 'open') {
+          dialog.close();
+          location.hash = `#/r/${id}`;
+        } else if (act === 'edit') {
+          dialog.close();
+          location.hash = `#/r/${id}/edit`;
+        } else if (act === 'fav') {
+          await api(`/api/recipes/${id}`, { method: 'PUT', body: { favorite: !r.favorite } });
+          dialog.close();
+          toast(r.favorite ? 'הוסר מהמועדפים' : 'נשמר במועדפים', { ic: 'heart' });
+          loadGrid();
+        } else if (act === 'share') {
+          dialog.close();
+          if (APP) shareRecipeText(r);
+          else shareDialog('recipe', id, r.title, 'utensils-crossed');
+        } else if (act === 'delete') {
+          if (!confirm(`למחוק את "${r.title}"? אי אפשר לבטל.`)) return;
+          await api(`/api/recipes/${id}`, { method: 'DELETE' });
+          dialog.close();
+          toast('המתכון נמחק', { ic: 'trash-2' });
+          await refreshMeta();
+          loadGrid();
+        }
+      };
+    },
+  );
+}
+
 function bindGrid() {
+  if ($('#grid') && !READONLY) bindLongPress($('#grid'));
   $('#filters')?.addEventListener('click', (e) => {
     const b = e.target.closest('button');
     if (!b) return;
@@ -612,6 +717,7 @@ async function showRecipe(id) {
           : ''}
         <div class="r-cta">
           ${realSteps.length ? html`<button class="btn primary big" id="cookBtn">${icon('chef-hat')}מצב בישול</button>` : ''}
+          ${READONLY ? '' : html`<a class="btn soft big" href="#/r/${r.id}/edit">${icon('pencil')}עריכה ותגיות</a>`}
           ${linkOnly && source
             ? html`<a class="btn primary big" href="${source}" target="_blank" rel="noopener noreferrer">${icon('external-link')}${/instagram\.com/i.test(source) ? 'פתיחת הפוסט באינסטגרם' : 'פתיחת המתכון באתר'}</a>`
             : ''}
@@ -1238,7 +1344,10 @@ async function mountEditor(host, r) {
         <h2><span class="num">4</span>תגיות ואוספים</h2>
         <div class="field">
           <label class="label" for="tagText">תגיות <span class="hint">· הירוקות נוספו אוטומטית לפי המצרכים</span></label>
-          <div class="tag-input" id="tagInput"><input id="tagText" placeholder="הוסיפו תגית ולחצו Enter" list="tagList" enterkeyhint="done" /></div>
+          <div class="tag-row">
+            <div class="tag-input" id="tagInput"><input id="tagText" placeholder="תגית חדשה, למשל: שבת" list="tagList" enterkeyhint="done" autocomplete="off" /></div>
+            <button type="button" class="btn soft" id="tagAdd">${icon('plus', 'sm')}הוספה</button>
+          </div>
           <datalist id="tagList">${state.tags.map((t) => html`<option value="${t.tag}"></option>`)}</datalist>
           <div class="suggest" id="tagSuggest"></div>
         </div>
@@ -1313,41 +1422,51 @@ async function mountEditor(host, r) {
   drawThumbs();
   drawTags();
 
+  // Android keyboards (Gboard, Samsung) often report keyCode 229 instead of Enter/comma,
+  // so tags are also committed on input (comma typed), on change (Done / leaving the field) and by the button.
+  const commitTag = () => {
+    const input = $('#tagText');
+    input.value.split(/[,،\n]/).forEach((t) => t.trim() && addTag(t));
+    input.value = '';
+  };
   $('#tagText').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault();
-      addTag(e.target.value);
-      e.target.value = '';
+      commitTag();
     } else if (e.key === 'Backspace' && !e.target.value && ed.tags.length) {
       ed.tags.pop();
       drawTags();
     }
   });
-  $('#tagText').addEventListener('change', (e) => {
-    if (state.tags.some((t) => t.tag === e.target.value)) {
-      addTag(e.target.value);
-      e.target.value = '';
-    }
+  $('#tagText').addEventListener('input', (e) => {
+    if (/[,،\n]/.test(e.target.value)) commitTag();
+  });
+  $('#tagText').addEventListener('change', () => commitTag());
+  $('#tagAdd').addEventListener('click', () => {
+    commitTag();
+    $('#tagText').focus();
   });
   $('#tagSuggest').onclick = (e) => {
     const b = e.target.closest('[data-t]');
     if (b) addTag(b.dataset.t);
   };
 
-  let autoTimer;
+  let autoTimer = null;
+  const applyAuto = async () => {
+    autoTimer = null;
+    if (!$('#f-ingredients')) return;
+    const totalMinutes = Number($('#f-total').value) || Number($('#f-prep').value) + Number($('#f-cook').value) || null;
+    const { tags } = await api('/api/autotags', { method: 'POST', body: { ingredients: lines('#f-ingredients'), totalMinutes } });
+    if (!$('#f-ingredients')) return;
+    ed.tags = ed.tags.filter((t) => !ed.autoTags.has(t) || tags.includes(t));
+    ed.autoTags = new Set(tags);
+    const fresh = tags.filter((t) => !ed.removedAuto.has(t) && !ed.tags.includes(t));
+    ed.tags = [...fresh, ...ed.tags];
+    drawTags();
+  };
   const refreshAuto = () => {
     clearTimeout(autoTimer);
-    autoTimer = setTimeout(async () => {
-      if (!$('#f-ingredients')) return;
-      const totalMinutes = Number($('#f-total').value) || Number($('#f-prep').value) + Number($('#f-cook').value) || null;
-      const { tags } = await api('/api/autotags', { method: 'POST', body: { ingredients: lines('#f-ingredients'), totalMinutes } });
-      if (!$('#f-ingredients')) return;
-      ed.tags = ed.tags.filter((t) => !ed.autoTags.has(t) || tags.includes(t));
-      ed.autoTags = new Set(tags);
-      const fresh = tags.filter((t) => !ed.removedAuto.has(t) && !ed.tags.includes(t));
-      ed.tags = [...fresh, ...ed.tags];
-      drawTags();
-    }, 450);
+    autoTimer = setTimeout(applyAuto, 450);
   };
   ['#f-ingredients', '#f-total', '#f-prep', '#f-cook'].forEach((s) => $(s).addEventListener('input', refreshAuto));
   if (isNew && r.kind !== 'link') refreshAuto();
@@ -1400,6 +1519,11 @@ async function mountEditor(host, r) {
     e.preventDefault();
     const pending = $('#tagText').value.trim();
     if (pending) addTag(pending);
+    if (autoTimer) {
+      // ingredients changed a moment ago: finish the automatic tags before saving
+      clearTimeout(autoTimer);
+      await applyAuto();
+    }
     const title = $('#f-title').value.trim();
     if (!title) {
       $('#f-title').setAttribute('aria-invalid', 'true');
