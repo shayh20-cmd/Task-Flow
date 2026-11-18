@@ -136,3 +136,23 @@ test('tag management: create, rename (with merge), assign, delete', async () => 
   assert.equal((await call(`/api/tags/${enc('ערב')}`, 'DELETE')).status, 204);
   assert.deepEqual((await call(`/api/recipes/${a.id}`)).data.tags.sort(), ['מהיר']);
 });
+
+test('categories: defaults, filter, rename, reorder, delete', async () => {
+  const enc = encodeURIComponent;
+  const cats = (await call('/api/categories')).data.map((c) => c.name);
+  assert.equal(cats[0], 'סלטים');
+  assert.ok(cats.includes('קינוחים'));
+  const r = (await call('/api/recipes', 'POST', { title: 'עוגת שוקולד', category: 'קינוחים' })).data;
+  assert.equal(r.category, 'קינוחים');
+  assert.equal((await call(`/api/recipes?category=${enc('קינוחים')}`)).data.length, 1);
+  await call('/api/categories', 'POST', { name: 'מנות לחג' });
+  await call(`/api/categories/${enc('קינוחים')}`, 'PUT', { name: 'מתוקים' });
+  assert.equal((await call(`/api/recipes/${r.id}`)).data.category, 'מתוקים');
+  const after = (await call('/api/categories')).data;
+  assert.equal(after.find((c) => c.name === 'מתוקים').count, 1);
+  assert.equal(after.at(-1).name, 'מנות לחג');
+  await call('/api/categories/order', 'PUT', { names: ['מנות לחג', ...after.map((c) => c.name).filter((n) => n !== 'מנות לחג')] });
+  assert.equal((await call('/api/categories')).data[0].name, 'מנות לחג');
+  await call(`/api/categories/${enc('מתוקים')}`, 'DELETE');
+  assert.equal((await call(`/api/recipes/${r.id}`)).data.category, '');
+});

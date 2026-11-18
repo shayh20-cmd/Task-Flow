@@ -3,9 +3,10 @@
 import { autoTags, AUTO_TAGS } from './shared/autotag.js';
 import { extractFromHtml, parseDoc } from './shared/extract-dom.js';
 import { instagramPost, importInstagram } from './shared/instagram.js';
+import { DEFAULT_CATEGORIES, suggestCategory } from './shared/category.js';
 
 const DB_NAME = 'recipin';
-const DB_VERSION = 2; // v2: 'tags' store for tags created in tag management
+const DB_VERSION = 3; // v2: 'tags' store for tags created in tag management · v3: 'categories'
 let dbPromise;
 
 function openDb() {
@@ -17,6 +18,10 @@ function openDb() {
       if (!db.objectStoreNames.contains('collections')) db.createObjectStore('collections', { keyPath: 'id', autoIncrement: true });
       if (!db.objectStoreNames.contains('images')) db.createObjectStore('images', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('tags')) db.createObjectStore('tags', { keyPath: 'tag' });
+      if (!db.objectStoreNames.contains('categories')) {
+        const cats = db.createObjectStore('categories', { keyPath: 'name' });
+        DEFAULT_CATEGORIES.forEach((name, position) => cats.put({ name, position }));
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -102,7 +107,7 @@ const minutes = (v) => (v === '' || v == null || isNaN(Number(v)) ? null : Math.
 
 async function cleanRecipe(body, prev = {}) {
   const r = { ...prev };
-  for (const k of ['kind', 'title', 'description', 'notes', 'sourceUrl', 'sourceName', 'author', 'servings'])
+  for (const k of ['kind', 'title', 'description', 'notes', 'sourceUrl', 'sourceName', 'author', 'servings', 'category'])
     if (body[k] !== undefined) r[k] = str(body[k], k === 'notes' || k === 'description' ? 20000 : 2000);
   for (const k of ['ingredients', 'steps']) if (body[k] !== undefined) r[k] = toList(body[k]).map((x) => String(x).trim()).filter(Boolean);
   for (const k of ['prepMinutes', 'cookMinutes', 'totalMinutes']) if (body[k] !== undefined) r[k] = minutes(body[k]);
@@ -123,11 +128,12 @@ async function cleanRecipe(body, prev = {}) {
 const DEFAULTS = {
   kind: 'manual', title: '', description: '', cover: '', images: [], ingredients: [], steps: [], notes: '',
   sourceUrl: '', sourceName: '', author: '', prepMinutes: null, cookMinutes: null, totalMinutes: null,
-  servings: '', favorite: false, tags: [], autoTags: [], collections: [],
+  servings: '', favorite: false, category: '', tags: [], autoTags: [], collections: [],
 };
 
-function matches(r, { q, tags, collection, favorite }) {
+function matches(r, { q, tags, collection, favorite, category }) {
   if (favorite && !r.favorite) return false;
+  if (category && (r.category || '') !== category) return false;
   if (collection && !r.collections.includes(collection)) return false;
   for (const t of tags) if (!r.tags.includes(t)) return false;
   if (q) {
@@ -215,10 +221,10 @@ const b64ToBlob = (b64, type) => {
 };
 
 export async function exportBackup() {
-  const [recipes, collections, images, tags] = await Promise.all([getAll('recipes'), getAll('collections'), getAll('images'), getAll('tags')]);
+  const [recipes, collections, images, tags, categories] = await Promise.all([getAll('recipes'), getAll('collections'), getAll('images'), getAll('tags'), getAll('categories')]);
   const imgs = [];
   for (const i of images) imgs.push({ id: i.id, type: i.blob.type || 'image/jpeg', data: await blobToB64(i.blob) });
-  return { app: 'recipin', version: 1, exportedAt: new Date().toISOString(), recipes, collections, tags, images: imgs };
+  return { app: 'recipin', version: 1, exportedAt: new Date().toISOString(), recipes, collections, tags, categories, images: imgs };
 }
 
 /** Replaces everything on the device with the backup's content. */
@@ -226,6 +232,10 @@ export async function restoreBackup(data) {
   if (!data || data.app !== 'recipin' || !Array.isArray(data.recipes)) throw new Error('הקובץ אינו גיבוי של Recipin');
   await Promise.all([clear('recipes'), clear('collections'), clear('images'), clear('tags')]);
   for (const t of data.tags || []) await put('tags', t);
+  if (Array.isArray(data.categories) && data.categories.length) {
+    await clear('categories');
+    for (const c of data.categories) await put('categories', c);
+  }
   for (const i of data.images || []) await put('images', { id: i.id, blob: b64ToBlob(i.data, i.type) });
   for (const c of data.collections || []) await put('collections', c);
   for (const r of data.recipes) await put('recipes', { ...DEFAULTS, ...r });
@@ -267,6 +277,30 @@ export async function refreshAutoTagsOnce() {
   return changed;
 }
 
+/** One-time: existing recipes without a category get a suggested one (they can be changed later). */
+export async function assignCategoriesOnce() {
+  try {
+    if (localStorage.getItem('recipin-categories-assigned') === '1') return 0;
+  } catch {
+    return 0;
+  }
+  let n = 0;
+  for (const r of await getAll('recipes')) {
+    if (r.category) continue;
+    const c = suggestCategory(r);
+    if (c) {
+      await put('recipes', { ...r, category: c });
+      n++;
+    }
+  }
+  try {
+    localStorage.setItem('recipin-categories-assigned', '1');
+  } catch {
+    /* ignore */
+  }
+  return n;
+}
+
 export async function stats() {
   const [recipes, collections, images] = await Promise.all([getAll('recipes'), getAll('collections'), getAll('images')]);
   const bytes = images.reduce((s, i) => s + (i.blob?.size || 0), 0);
@@ -290,6 +324,7 @@ export async function localApi(path, { method = 'GET', body, form } = {}) {
         tags: u.searchParams.getAll('tag'),
         collection: Number(u.searchParams.get('collection')) || null,
         favorite: u.searchParams.get('favorite') === '1',
+        category: u.searchParams.get('category') || '',
       });
     if (!idStr && method === 'POST') {
       const r = await cleanRecipe(body, { ...DEFAULTS });
@@ -330,6 +365,41 @@ export async function localApi(path, { method = 'GET', body, form } = {}) {
 
   if (res === 'autotags' && method === 'POST')
     return { tags: autoTags({ ingredients: toList(body?.ingredients).map(String), totalMinutes: Number(body?.totalMinutes) || null }) };
+
+  if (res === 'categories') {
+    const name = (v) => String(v ?? '').trim().slice(0, 40);
+    const cats = (await getAll('categories')).sort((a, b) => a.position - b.position || a.name.localeCompare(b.name, 'he'));
+    if (!idStr && method === 'GET') {
+      const recipes = await getAll('recipes');
+      return cats.map((c) => ({ ...c, count: recipes.filter((r) => r.category === c.name).length }));
+    }
+    if (!idStr && method === 'POST') {
+      const n = name(body?.name);
+      if (!n) throw err(400, 'חסר שם לקטגוריה');
+      if (!cats.some((c) => c.name === n)) await put('categories', { name: n, position: cats.length });
+      return { name: n };
+    }
+    if (idStr === 'order' && method === 'PUT') {
+      const names = toList(body?.names).map(name);
+      for (const c of cats) await put('categories', { ...c, position: names.indexOf(c.name) < 0 ? 999 : names.indexOf(c.name) });
+      return localApi('/api/categories');
+    }
+    const from = name(decodeURIComponent(idStr));
+    if (method === 'PUT') {
+      const to = name(body?.name);
+      if (!to) throw err(400, 'חסר שם לקטגוריה');
+      const old = cats.find((c) => c.name === from);
+      await del('categories', from);
+      if (!cats.some((c) => c.name === to)) await put('categories', { name: to, position: old?.position ?? cats.length });
+      for (const r of await getAll('recipes')) if (r.category === from) await put('recipes', { ...r, category: to });
+      return { name: to };
+    }
+    if (method === 'DELETE') {
+      await del('categories', from);
+      for (const r of await getAll('recipes')) if (r.category === from) await put('recipes', { ...r, category: '' });
+      return null;
+    }
+  }
 
   if (res === 'tags') {
     const name = (v) => String(v ?? '').trim().replace(/^#/, '').slice(0, 40);

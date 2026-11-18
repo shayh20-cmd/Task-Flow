@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { randomBytes } from 'node:crypto';
+import { DEFAULT_CATEGORIES, suggestCategory } from '../public/shared/category.js';
 
 export function openDb(file) {
   if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true });
@@ -65,6 +66,27 @@ export function openDb(file) {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
+  // v2 schema: main category per recipe + an editable list of categories
+  const cols = db.prepare('PRAGMA table_info(recipes)').all().map((c) => c.name);
+  if (!cols.includes('category')) db.exec("ALTER TABLE recipes ADD COLUMN category TEXT NOT NULL DEFAULT ''");
+  db.exec(`CREATE TABLE IF NOT EXISTS categories (
+    name     TEXT PRIMARY KEY,
+    position INTEGER NOT NULL DEFAULT 0
+  )`);
+  if (!db.prepare('SELECT COUNT(*) AS n FROM categories').get().n) {
+    const ins = db.prepare('INSERT OR IGNORE INTO categories (name, position) VALUES (?, ?)');
+    DEFAULT_CATEGORIES.forEach((c, i) => ins.run(c, i));
+  }
+  // one-time: existing recipes without a category get a suggested one
+  db.exec('CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)');
+  if (!db.prepare("SELECT 1 FROM meta WHERE key = 'categories_assigned'").get()) {
+    const up = db.prepare('UPDATE recipes SET category = ? WHERE id = ?');
+    for (const r of db.prepare("SELECT id, title, ingredients FROM recipes WHERE category = ''").all()) {
+      const c = suggestCategory({ title: r.title, ingredients: JSON.parse(r.ingredients || '[]') });
+      if (c) up.run(c, r.id);
+    }
+    db.prepare("INSERT INTO meta (key, value) VALUES ('categories_assigned', '1')").run();
+  }
   return new Store(db);
 }
 
@@ -80,7 +102,7 @@ const FIELDS = {
   kind: 'kind', title: 'title', description: 'description', cover: 'cover', images: 'images',
   ingredients: 'ingredients', steps: 'steps', notes: 'notes', sourceUrl: 'source_url', sourceName: 'source_name',
   author: 'author', prepMinutes: 'prep_minutes', cookMinutes: 'cook_minutes', totalMinutes: 'total_minutes',
-  servings: 'servings', favorite: 'favorite',
+  servings: 'servings', favorite: 'favorite', category: 'category',
 };
 const JSON_FIELDS = new Set(['images', 'ingredients', 'steps']);
 
@@ -101,7 +123,7 @@ class Store {
       images: J(r.images), ingredients: J(r.ingredients), steps: J(r.steps), notes: r.notes,
       sourceUrl: r.source_url, sourceName: r.source_name, author: r.author,
       prepMinutes: r.prep_minutes, cookMinutes: r.cook_minutes, totalMinutes: r.total_minutes,
-      servings: r.servings, favorite: !!r.favorite,
+      servings: r.servings, favorite: !!r.favorite, category: r.category || '',
       tags: tags.map((t) => t.tag), autoTags: tags.filter((t) => t.auto).map((t) => t.tag),
       collections: cols, createdAt: r.created_at, updatedAt: r.updated_at,
     };
@@ -112,7 +134,7 @@ class Store {
   }
 
   /** filters: { q, tags: string[], collection, favorite, ids } */
-  listRecipes({ q = '', tags = [], collection = null, favorite = false, ids = null } = {}) {
+  listRecipes({ q = '', tags = [], collection = null, favorite = false, ids = null, category = '' } = {}) {
     const where = [];
     const args = [];
     if (q) {
@@ -131,6 +153,10 @@ class Store {
       args.push(Number(collection));
     }
     if (favorite) where.push('r.favorite = 1');
+    if (category) {
+      where.push('r.category = ?');
+      args.push(category);
+    }
     if (ids) {
       if (!ids.length) return [];
       where.push(`r.id IN (${ids.map(() => '?').join(',')})`);
@@ -228,6 +254,34 @@ class Store {
     const del = this.db.prepare('DELETE FROM recipe_tags WHERE recipe_id = ? AND tag = ?');
     for (const id of add) if (this.getRecipe(Number(id))) ins.run(Number(id), tag);
     for (const id of remove) del.run(Number(id), tag);
+  }
+
+  // ---- categories ----
+  listCategories() {
+    return this.db
+      .prepare(
+        `SELECT c.name, c.position, (SELECT COUNT(*) FROM recipes r WHERE r.category = c.name) AS count
+         FROM categories c ORDER BY c.position, c.name`,
+      )
+      .all();
+  }
+  createCategory(name) {
+    const max = this.db.prepare('SELECT COALESCE(MAX(position), -1) AS m FROM categories').get().m;
+    this.db.prepare('INSERT OR IGNORE INTO categories (name, position) VALUES (?, ?)').run(name, max + 1);
+  }
+  renameCategory(from, to) {
+    const exists = this.db.prepare('SELECT 1 FROM categories WHERE name = ?').get(to);
+    if (exists) this.db.prepare('DELETE FROM categories WHERE name = ?').run(from);
+    else this.db.prepare('UPDATE categories SET name = ? WHERE name = ?').run(to, from);
+    this.db.prepare('UPDATE recipes SET category = ? WHERE category = ?').run(to, from);
+  }
+  deleteCategory(name) {
+    this.db.prepare('DELETE FROM categories WHERE name = ?').run(name);
+    this.db.prepare("UPDATE recipes SET category = '' WHERE category = ?").run(name);
+  }
+  reorderCategories(names) {
+    const up = this.db.prepare('UPDATE categories SET position = ? WHERE name = ?');
+    names.forEach((n, i) => up.run(i, n));
   }
 
   allTags() {

@@ -1,6 +1,7 @@
 // Recipin – client (vanilla JS modules, hash routing, no build step)
 import { scaleIngredient, baseServings, findDurations, formatClock, formatQty } from './kitchen.js';
 import { parseRecipeText } from './shared/recipe-text.js';
+import { suggestCategory } from './shared/category.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -85,9 +86,15 @@ const hostOf = (u) => {
 };
 
 const KOSHER = { בשרי: 'k-meat', חלבי: 'k-dairy', פרווה: 'k-parve' };
+const CAT_ICON = {
+  סלטים: 'salad', מרקים: 'soup', עוף: 'drumstick', בשר: 'beef', דגים: 'fish', צמחוני: 'leaf', 'פסטה ואורז': 'wheat',
+  'מאפים ולחמים': 'croissant', תוספות: 'carrot', קינוחים: 'cake-slice', 'ארוחת בוקר': 'egg-fried', 'רטבים וממרחים': 'cooking-pot', משקאות: 'cup-soda',
+};
+const catIcon = (c, cls = 'sm') => icon(CAT_ICON[c] || 'tag', cls);
+
 const kosherOn = () => {
   try {
-    return localStorage.getItem('recipin-kosher') !== 'off';
+    return localStorage.getItem('recipin-kosher') === 'on';
   } catch {
     return true;
   }
@@ -145,10 +152,10 @@ function themeDialog() {
 }
 
 // ---------- state ----------
-const state = { tags: [], collections: [], filters: [], q: '', recipesCount: 0 };
+const state = { tags: [], collections: [], categories: [], category: '', filters: [], q: '', recipesCount: 0 };
 async function refreshMeta() {
   if (READONLY) return;
-  [state.tags, state.collections] = await Promise.all([api('/api/tags'), api('/api/collections')]);
+  [state.tags, state.collections, state.categories] = await Promise.all([api('/api/tags'), api('/api/collections'), api('/api/categories')]);
 }
 
 // ---------- routing ----------
@@ -183,6 +190,7 @@ async function route() {
     else if (parts[0] === 'r' && parts[2] === 'edit') await showEditPage(Number(parts[1]));
     else if (parts[0] === 'r') await showRecipe(Number(parts[1]));
     else if (parts[0] === 'settings' && parts[1] === 'tags') await showTagsManager();
+    else if (parts[0] === 'settings' && parts[1] === 'categories') await showCategoriesManager();
     else if (parts[0] === 'tags' && parts[1]) await showTagDetail(decodeURIComponent(parts[1]));
     else if (parts[0] === 'settings' || (APP && parts[0] === 'shares')) await showSettings();
     else if (parts[0] === 'shares') await showShares();
@@ -269,7 +277,7 @@ function cardHtml(r, i = 0) {
     <a href="#/r/${r.id}" aria-label="${r.title}">
       <div class="media">
         ${img ? html`<img src="${img}" alt="" loading="lazy" decoding="async" onerror="this.hidden=true" />` : placeholder(r.title)}
-        <div class="badges">${k ? html`<span class="kosher ${KOSHER[k]}">${k}</span>` : html`<span></span>`}</div>
+        <div class="badges">${r.category ? html`<span class="cat-badge">${catIcon(r.category)}${r.category}</span>` : html`<span></span>`}${k ? html`<span class="kosher ${KOSHER[k]}">${k}</span>` : ''}</div>
         ${r.totalMinutes ? html`<span class="time-badge">${icon('clock', 'sm')}${fmtMinutes(r.totalMinutes)}</span>` : ''}
       </div>
       <div class="body">
@@ -328,14 +336,20 @@ async function loadGrid() {
     if (gridCtx.collection) qs.set('collection', gridCtx.collection);
     if (gridCtx.favorite) qs.set('favorite', '1');
     recipes = await api(`/api/recipes?${qs}`);
-    tags = state.tags;
+  }
+  {
+    const counts = {};
+    for (const r of recipes) if (r.category) counts[r.category] = (counts[r.category] || 0) + 1;
+    renderCats(counts, recipes.length);
+    if (state.category) recipes = recipes.filter((r) => r.category === state.category);
+    if (!READONLY) tags = state.tags;
   }
   const f = $('#filters');
   if (f) render(f, filtersHtml(tags));
   const count = $('#count');
   if (count) count.textContent = `${recipes.length} מתכונים`;
   if (!recipes.length) {
-    const filtered = state.q || state.filters.length;
+    const filtered = state.q || state.filters.length || state.category;
     render(
       grid,
       html`<div class="empty">${emptyArt()}
@@ -353,6 +367,7 @@ async function loadGrid() {
     $('#clearAll')?.addEventListener('click', () => {
       state.q = '';
       state.filters = [];
+      state.category = '';
       const s = $('#search');
       if (s) s.value = '';
       loadGrid();
@@ -466,8 +481,29 @@ async function cardMenu(id) {
   );
 }
 
+function renderCats(counts, total) {
+  const el = $('#cats');
+  if (!el) return;
+  const order = state.categories.length ? state.categories.map((c) => c.name) : Object.keys(counts).sort((a, b) => a.localeCompare(b, 'he'));
+  const shown = order.filter((c) => counts[c] || c === state.category);
+  for (const c of Object.keys(counts)) if (!shown.includes(c)) shown.push(c);
+  if (!shown.length) return render(el, html``);
+  const sel = (c) => raw(`aria-pressed="${state.category === c}"`);
+  render(
+    el,
+    html`<button class="cat" data-cat="" ${sel('')}>${icon('layout-grid')}<span>הכל</span><small>${total}</small></button>
+      ${shown.map((c) => html`<button class="cat" data-cat="${c}" ${sel(c)}>${catIcon(c, '')}<span>${c}</span><small>${counts[c] || 0}</small></button>`)}`,
+  );
+}
+
 function bindGrid() {
   if ($('#grid') && !READONLY) bindLongPress($('#grid'));
+  $('#cats')?.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-cat]');
+    if (!b) return;
+    state.category = state.category === b.dataset.cat ? '' : b.dataset.cat;
+    loadGrid();
+  });
   $('#filters')?.addEventListener('click', (e) => {
     const b = e.target.closest('button');
     if (!b) return;
@@ -532,6 +568,7 @@ async function showHome() {
           <input id="search" type="search" placeholder="חפשו מתכון, מצרך או תגית…" value="${state.q}" autocomplete="off" enterkeyhint="search" />
         </div>
       </section>
+      <div class="cats" id="cats" role="toolbar" aria-label="קטגוריות"></div>
       <div class="filters" id="filters" role="toolbar" aria-label="סינון לפי תגיות"></div>
       ${state.collections.length
         ? html`<div class="section-title"><h2>האוספים שלי</h2><a class="back-link" href="#/collections">לכל האוספים</a></div>
@@ -573,6 +610,7 @@ async function showList(ctx) {
       </div>
       <div class="searchbox" style="margin-top:0">${icon('search')}<label class="sr-only" for="search">חיפוש</label>
         <input id="search" type="search" placeholder="חיפוש באוסף…" value="${state.q}" autocomplete="off" /></div>
+      <div class="cats" id="cats" role="toolbar" aria-label="קטגוריות"></div>
       <div class="filters" id="filters" role="toolbar" aria-label="סינון לפי תגיות"></div>
       <div class="section-title"><span></span><small id="count"></small></div>
       <div class="grid" id="grid">${skeletonGrid(6)}</div>
@@ -624,6 +662,7 @@ async function showSharedHome() {
         <div class="searchbox">${icon('search')}<label class="sr-only" for="search">חיפוש</label>
           <input id="search" type="search" placeholder="חיפוש מתכון או מצרך…" autocomplete="off" /></div>
       </section>
+      <div class="cats" id="cats" role="toolbar" aria-label="קטגוריות"></div>
       <div class="filters" id="filters" role="toolbar" aria-label="סינון לפי תגיות"></div>
       <div class="grid" id="grid" style="margin-top:16px">${skeletonGrid()}</div>
     </div>`,
@@ -708,6 +747,7 @@ async function showRecipe(id) {
         </div>
       </div>
       <section class="r-sheet">
+        ${r.category ? html`<a class="cat-chip" href="#/" data-cat="${r.category}">${catIcon(r.category)}${r.category}</a>` : ''}
         ${k
           ? html`<span class="kosher ${KOSHER[k]}" style="box-shadow:none;background:var(--surface-2);margin-bottom:10px" title="כשרות">${k}${r.autoTags.includes(k) ? html`<small class="kosher-src">· זוהה לפי המצרכים</small>` : ''}</span>`
           : ''}
@@ -781,6 +821,11 @@ async function showRecipe(id) {
     </article>`,
   );
 
+  $('.cat-chip')?.addEventListener('click', (e) => {
+    state.category = e.currentTarget.dataset.cat;
+    state.filters = [];
+    state.q = '';
+  });
   $('#descMore')?.addEventListener('click', (e) => {
     const open = $('#desc').classList.toggle('clamp');
     e.currentTarget.textContent = open ? 'המשך קריאה' : 'הצגת פחות';
@@ -1396,7 +1441,12 @@ async function mountEditor(host, r) {
           <span class="hint" id="stepHint">שלב בכל שורה. זמנים כמו "35 דקות" יהפכו לטיימר בלחיצה.</span></div>
       </section>
       <section class="ed-card">
-        <h2><span class="num">4</span>תגיות ואוספים</h2>
+        <h2><span class="num">4</span>קטגוריה, תגיות ואוספים</h2>
+        <div class="field">
+          <span class="label" id="catLabel">קטגוריה ראשית</span>
+          <div class="cat-pick" id="catPick" role="radiogroup" aria-labelledby="catLabel"></div>
+          <span class="hint" id="catHint"></span>
+        </div>
         ${kosherOn()
           ? html`<div class="field">
               <span class="label" id="kosherLabel">כשרות</span>
@@ -1454,6 +1504,31 @@ async function mountEditor(host, r) {
           <button type="button" class="mk" data-cover="${i}" aria-label="קביעה כתמונה ראשית">${icon('star', 'sm')}</button></div>`,
       )}`,
     );
+  // Main category: suggested from the title and ingredients until the user picks one.
+  ed.category = r.category || '';
+  ed.catAuto = !r.category;
+  const drawCats = () => {
+    const pick = $('#catPick');
+    if (!pick) return;
+    const names = state.categories.map((c) => c.name);
+    if (ed.category && !names.includes(ed.category)) names.push(ed.category);
+    render(
+      pick,
+      html`${names.map((c) => html`<button type="button" role="radio" class="chip" data-c="${c}" aria-checked="${ed.category === c}">${catIcon(c)}${c}</button>`)}
+        <button type="button" role="radio" class="chip" data-c="" aria-checked="${!ed.category}">ללא</button>
+        <button type="button" class="chip new" id="catNew">${icon('plus', 'sm')}קטגוריה חדשה</button>`,
+    );
+    $('#catHint').textContent = ed.catAuto && ed.category ? 'הוצעה לפי שם המתכון והמצרכים. אפשר לשנות.' : '';
+  };
+  const suggestCat = () => {
+    if (!ed.catAuto || !$('#f-title')) return;
+    const c = suggestCategory({ title: $('#f-title').value, ingredients: lines('#f-ingredients') });
+    if (c !== ed.category) {
+      ed.category = c;
+      drawCats();
+    }
+  };
+
   // Kashrut: picked automatically from the ingredients until the user chooses; a manual choice sticks.
   const KOSHER_KEYS = Object.keys(KOSHER);
   const lockKosher = () => KOSHER_KEYS.forEach((k) => (ed.removedAuto.add(k), ed.autoTags.delete(k)));
@@ -1516,6 +1591,26 @@ async function mountEditor(host, r) {
   drawCover();
   drawThumbs();
   drawTags();
+
+  drawCats();
+  suggestCat();
+  ['#f-title', '#f-ingredients'].forEach((sel) => $(sel).addEventListener('input', suggestCat));
+  $('#catPick').addEventListener('click', async (e) => {
+    if (e.target.closest('#catNew')) {
+      const name = await nameDialog({ title: 'קטגוריה חדשה', label: 'שם הקטגוריה', confirmLabel: 'הוספה' });
+      if (!name) return;
+      await api('/api/categories', { method: 'POST', body: { name } });
+      state.categories = await api('/api/categories');
+      ed.category = name;
+      ed.catAuto = false;
+      return drawCats();
+    }
+    const b = e.target.closest('[data-c]');
+    if (!b) return;
+    ed.category = b.dataset.c;
+    ed.catAuto = false;
+    drawCats();
+  });
 
   $('#kosherPick')?.addEventListener('click', (e) => {
     const b = e.target.closest('[data-k]');
@@ -1667,6 +1762,7 @@ async function mountEditor(host, r) {
       cookMinutes: num('#f-cook'),
       totalMinutes: num('#f-total') ?? ((num('#f-prep') || 0) + (num('#f-cook') || 0) || null),
       servings: $('#f-servings').value.trim(),
+      category: ed.category,
       sourceUrl,
       sourceName: sourceUrl === r.sourceUrl ? r.sourceName || '' : hostOf(sourceUrl),
       author: r.author || '',
@@ -1913,6 +2009,11 @@ async function showSettings() {
           </div>`
         : ''}
       <section class="ed-card" style="margin-top:24px">
+        <h2>${icon('layout-grid')}קטגוריות</h2>
+        <p class="muted">הקטגוריה הראשית של כל מתכון (סלטים, עוף, קינוחים…). מופיעה בראש הלוח ועל כל כרטיס.</p>
+        <a class="btn soft" href="#/settings/categories" style="align-self:flex-start">${icon('layout-grid', 'sm')}ניהול קטגוריות</a>
+      </section>
+      <section class="ed-card" style="margin-top:16px">
         <h2>${icon('tag')}תגיות</h2>
         <p class="muted">כל התגיות בספר: שינוי שם, מחיקה, הוספה, ואילו מתכונים קיבלו כל תגית.</p>
         <a class="btn soft" href="#/settings/tags" style="align-self:flex-start">${icon('tag', 'sm')}ניהול תגיות</a>
@@ -1980,18 +2081,89 @@ async function showSettings() {
   });
 }
 
+// ---------- category management ----------
+async function showCategoriesManager() {
+  document.title = 'קטגוריות · Recipin';
+  await refreshMeta();
+  const cats = state.categories;
+  render(
+    view,
+    html`<div class="page narrow">
+      <a class="back-link" href="#/settings">${icon('arrow-right', 'sm')}הגדרות</a>
+      <div class="page-head"><div><div class="eyebrow">${icon('layout-grid', 'sm')}ניהול</div><h1>קטגוריות</h1>
+        <p class="muted" style="margin-top:6px">לכל מתכון קטגוריה ראשית אחת. הסדר כאן הוא הסדר בראש הלוח.</p></div></div>
+      <form class="tag-row" id="newCatForm" novalidate>
+        <div class="field" style="flex:1"><label class="sr-only" for="newCat">קטגוריה חדשה</label><input id="newCat" placeholder="קטגוריה חדשה, למשל: מנות לחג" autocomplete="off" enterkeyhint="done" /></div>
+        <button class="btn primary">${icon('plus', 'sm')}הוספה</button>
+      </form>
+      <ul class="tag-list" id="catList" style="margin-top:16px">${cats.map(
+        (c, i) => html`<li data-name="${c.name}">
+          <a class="tag-link cat-link" href="#/" data-open="${c.name}"><span class="tag-name">${catIcon(c.name)} ${c.name}</span><span class="muted small">${c.count ? recipesWord(c.count) : 'עוד בלי מתכונים'}</span></a>
+          <button class="btn round quiet" data-act="up" aria-label="הזזה למעלה" ${raw(i === 0 ? 'disabled' : '')}>${icon('arrow-up', 'sm')}</button>
+          <button class="btn round quiet" data-act="down" aria-label="הזזה למטה" ${raw(i === cats.length - 1 ? 'disabled' : '')}>${icon('arrow-down', 'sm')}</button>
+          <button class="btn round quiet" data-act="rename" aria-label="שינוי שם לקטגוריה ${c.name}">${icon('pencil', 'sm')}</button>
+          <button class="btn round quiet danger" data-act="delete" aria-label="מחיקת הקטגוריה ${c.name}">${icon('trash-2', 'sm')}</button>
+        </li>`,
+      )}</ul>
+    </div>`,
+  );
+  $('#newCatForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const name = $('#newCat').value.trim();
+    if (!name) return $('#newCat').focus();
+    if (cats.some((c) => c.name === name)) return toast('הקטגוריה כבר קיימת', { error: true });
+    await api('/api/categories', { method: 'POST', body: { name } });
+    toast('הקטגוריה נוספה', { ic: 'layout-grid' });
+    showCategoriesManager();
+  };
+  $('#catList').onclick = async (e) => {
+    const open = e.target.closest('[data-open]');
+    if (open) {
+      state.category = open.dataset.open;
+      state.filters = [];
+      return;
+    }
+    const b = e.target.closest('[data-act]');
+    if (!b) return;
+    const name = b.closest('li').dataset.name;
+    const c = cats.find((x) => x.name === name);
+    const act = b.dataset.act;
+    if (act === 'up' || act === 'down') {
+      const names = cats.map((x) => x.name);
+      const i = names.indexOf(name);
+      const j = act === 'up' ? i - 1 : i + 1;
+      [names[i], names[j]] = [names[j], names[i]];
+      await api('/api/categories/order', { method: 'PUT', body: { names } });
+    } else if (act === 'rename') {
+      const to = await nameDialog({ title: `שינוי שם: ${name}`, value: name, label: 'שם הקטגוריה', confirmLabel: 'שמירה' });
+      if (!to || to === name) return;
+      if (cats.some((x) => x.name === to) && !confirm(`הקטגוריה "${to}" כבר קיימת. לאחד את "${name}" לתוכה?`)) return;
+      await api(`/api/categories/${encodeURIComponent(name)}`, { method: 'PUT', body: { name: to } });
+      toast('שם הקטגוריה עודכן', { ic: 'layout-grid' });
+    } else if (act === 'delete') {
+      if (!confirm(c.count ? `למחוק את הקטגוריה "${name}"? ${recipesWord(c.count)} יישארו בלי קטגוריה.` : `למחוק את הקטגוריה "${name}"?`)) return;
+      await api(`/api/categories/${encodeURIComponent(name)}`, { method: 'DELETE' });
+      toast('הקטגוריה נמחקה', { ic: 'trash-2' });
+    }
+    showCategoriesManager();
+  };
+}
+
 // ---------- tag management ----------
 const tagHref = (t) => `#/tags/${encodeURIComponent(t)}`;
 const recipesWord = (n) => (n === 1 ? 'מתכון אחד' : `${n} מתכונים`);
 // Hebrew prefix letter before a number takes a hyphen: "ל-2 מתכונים", but "למתכון אחד"
 const withPrefix = (letter, n) => (n === 1 ? `${letter}מתכון אחד` : `${letter}-${n} מתכונים`);
 
-function tagNameDialog({ title, value = '', confirmLabel }) {
+function tagNameDialog(opts) {
+  return nameDialog({ label: 'שם התגית', ...opts });
+}
+function nameDialog({ title, value = '', confirmLabel, label = 'שם' }) {
   return new Promise((resolve) => {
     openDialog(
       html`<form class="dlg" id="tagForm" novalidate>
         <div class="dlg-head"><h2>${title}</h2><button type="button" class="btn round quiet" data-close aria-label="סגירה">${icon('x')}</button></div>
-        <div class="field"><label class="label" for="tagName">שם התגית</label><input id="tagName" value="${value}" autocomplete="off" enterkeyhint="done" /></div>
+        <div class="field"><label class="label" for="tagName">${label}</label><input id="tagName" value="${value}" autocomplete="off" enterkeyhint="done" /></div>
         <div class="dlg-actions"><span class="spacer"></span><button class="btn primary">${icon('check', 'sm')}${confirmLabel}</button></div>
       </form>`,
       () => {
@@ -2167,7 +2339,7 @@ if ('serviceWorker' in navigator && !READONLY && !APP) navigator.serviceWorker.r
 if (APP) setupNative();
 if (APP)
   import('./local-api.js')
-    .then((m) => m.refreshAutoTagsOnce())
-    .then((n) => n && (route(), toast(`עדכנו את התגיות האוטומטיות ב-${n} מתכונים`, { ic: 'sparkles' })))
+    .then(async (m) => (await m.refreshAutoTagsOnce()) + (await m.assignCategoriesOnce()))
+    .then((n) => n && (route(), toast(`עדכנו קטגוריות ותגיות ב-${n} מתכונים`, { ic: 'sparkles' })))
     .catch(() => {});
 route();

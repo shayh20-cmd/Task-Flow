@@ -72,7 +72,7 @@ export function createApp({ dataDir = join(ROOT, 'data'), dbFile, password = pro
 
   function cleanRecipeInput(body, { partial = false } = {}) {
     const out = {};
-    const str = ['kind', 'title', 'description', 'cover', 'notes', 'sourceUrl', 'sourceName', 'author', 'servings'];
+    const str = ['kind', 'title', 'description', 'cover', 'notes', 'sourceUrl', 'sourceName', 'author', 'servings', 'category'];
     for (const k of str) if (body[k] !== undefined) out[k] = String(body[k] ?? '').slice(0, k === 'notes' || k === 'description' ? 20000 : 2000);
     for (const k of ['images', 'ingredients', 'steps', 'tags', 'autoTags', 'collections']) {
       if (body[k] !== undefined) out[k] = toList(body[k]).map((x) => (k === 'collections' ? Number(x) : String(x).trim())).filter((x) => x !== '' && x === x);
@@ -98,6 +98,7 @@ export function createApp({ dataDir = join(ROOT, 'data'), dbFile, password = pro
         tags: toList(req.query.tag).map(String),
         collection: req.query.collection ? Number(req.query.collection) : null,
         favorite: req.query.favorite === '1',
+        category: String(req.query.category || ''),
       }),
     );
   });
@@ -148,6 +149,30 @@ export function createApp({ dataDir = join(ROOT, 'data'), dbFile, password = pro
 
   app.post('/api/autotags', (req, res) => {
     res.json({ tags: autoTags({ ingredients: toList(req.body.ingredients).map(String), totalMinutes: Number(req.body.totalMinutes) || null }) });
+  });
+
+  // ---------- categories (one main category per recipe) ----------
+  const catName = (v) => String(v ?? '').trim().slice(0, 40);
+  app.get('/api/categories', (_req, res) => res.json(store.listCategories()));
+  app.post('/api/categories', (req, res) => {
+    const name = catName(req.body.name);
+    if (!name) return res.status(400).json({ error: 'חסר שם לקטגוריה' });
+    store.createCategory(name);
+    res.status(201).json({ name });
+  });
+  app.put('/api/categories/order', (req, res) => {
+    store.reorderCategories(toList(req.body.names).map(catName));
+    res.json(store.listCategories());
+  });
+  app.put('/api/categories/:name', (req, res) => {
+    const to = catName(req.body.name);
+    if (!to) return res.status(400).json({ error: 'חסר שם לקטגוריה' });
+    store.renameCategory(catName(req.params.name), to);
+    res.json({ name: to });
+  });
+  app.delete('/api/categories/:name', (req, res) => {
+    store.deleteCategory(catName(req.params.name));
+    res.status(204).end();
   });
 
   app.get('/api/tags', (_req, res) => res.json(store.allTags().map((t) => ({ ...t, auto: AUTO_TAGS.includes(t.tag) }))));
