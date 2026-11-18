@@ -74,6 +74,52 @@ const PH = ['#FCE7DA', '#FBE3A6', '#DCEFD9', '#F8D9CF', '#E7E0F5', '#D9EAF7'];
 const phColor = (s) => PH[[...String(s)].reduce((a, c) => a + c.charCodeAt(0), 0) % PH.length];
 const placeholder = (title, ic = 'cooking-pot') => html`<div class="ph" style="--ph:${phColor(title)}">${icon(ic)}<b>${title}</b></div>`;
 
+// ---------- colour palettes ----------
+const THEMES = [
+  { id: 'terracotta', name: 'טרקוטה', desc: 'חמים וביתי, כמו סיר חרס', dots: ['#9A3412', '#2F7D5B', '#FCE7DA'] },
+  { id: 'cafe', name: 'קפה ומאפה', desc: 'חום קרמל, דבש וקרם', dots: ['#92400E', '#4F7A3A', '#FBE9C8'] },
+  { id: 'wine', name: 'יין וענבים', desc: 'בורדו עמוק עם נגיעת זהב', dots: ['#7A1F3D', '#A16207', '#F7E1E8'] },
+  { id: 'market', name: 'שוק ירוק', desc: 'זית, עשבי תיבול ורעננות', dots: ['#3F6B2A', '#0F766E', '#E4EED8'] },
+  { id: 'sea', name: 'ים תיכון', desc: 'כחול אריחים יווני ושמש', dots: ['#1D4E89', '#2F7D5B', '#E0EAF6'] },
+];
+function currentTheme() {
+  return document.documentElement.dataset.theme || 'terracotta';
+}
+function applyTheme(id) {
+  if (id === 'terracotta') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.dataset.theme = id;
+  try {
+    localStorage.setItem('recipin-theme', id);
+  } catch {
+    /* storage unavailable */
+  }
+  const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+  $$('meta[name=theme-color]').forEach((m) => m.setAttribute('content', bg));
+}
+function themeDialog() {
+  openDialog(
+    html`<div class="dlg">
+      <div class="dlg-head"><h2>צבעי הספר</h2><button class="btn round quiet" data-close aria-label="סגירה">${icon('x')}</button></div>
+      <div class="swatches" role="radiogroup" aria-label="פלטת צבעים">
+        ${THEMES.map(
+          (t) => html`<button class="swatch" role="radio" aria-checked="${t.id === currentTheme()}" data-theme-id="${t.id}">
+            <span class="dots">${t.dots.map((c) => html`<i style="background:${c}"></i>`)}</span>
+            <span><strong>${t.name}</strong><small>${t.desc}</small></span>${icon('check')}
+          </button>`,
+        )}
+      </div>
+    </div>`,
+    () => {
+      $('.swatches', dialog).onclick = (e) => {
+        const b = e.target.closest('[data-theme-id]');
+        if (!b) return;
+        applyTheme(b.dataset.themeId);
+        $$('.swatch', dialog).forEach((x) => x.setAttribute('aria-checked', x === b));
+      };
+    },
+  );
+}
+
 // ---------- state ----------
 const state = { tags: [], collections: [], filters: [], q: '', recipesCount: 0 };
 async function refreshMeta() {
@@ -137,7 +183,8 @@ function renderChrome(parts) {
   const cur = (k) => raw(k === key ? 'aria-current="page"' : '');
   if (READONLY) {
     render($('#topnav'), html``);
-    render($('#topCta'), html`<span class="chip" style="box-shadow:none">${icon('book-open', 'sm')} צפייה בלבד</span>`);
+    render($('#topCta'), html`<span class="chip" style="box-shadow:none">${icon('book-open', 'sm')} צפייה בלבד</span><button class="btn round quiet" id="themeBtn" aria-label="צבעי הספר">${icon('palette')}</button>`);
+    $('#themeBtn').onclick = themeDialog;
     render($('#tabbar'), html``);
     $('#tabbar').hidden = true;
     return;
@@ -146,7 +193,8 @@ function renderChrome(parts) {
     $('#topnav'),
     html`${NAV.filter((n) => !n.fab).map((n) => html`<a href="${n.href}" ${cur(n.key)}>${icon(n.ic)}${n.label}</a>`)}`,
   );
-  render($('#topCta'), html`<a class="btn primary hide-m" href="#/add">${icon('plus')}תיוק מתכון</a>`);
+  render($('#topCta'), html`<button class="btn round quiet" id="themeBtn" aria-label="צבעי הספר">${icon('palette')}</button><a class="btn primary hide-m" href="#/add">${icon('plus')}תיוק מתכון</a>`);
+  $('#themeBtn').onclick = themeDialog;
   render(
     $('#tabbar'),
     html`${NAV.map((n) =>
@@ -160,14 +208,14 @@ function renderChrome(parts) {
 // ---------- illustrations ----------
 function heroArt() {
   return raw(`<svg class="hero-deco" viewBox="0 0 200 200" aria-hidden="true">
-    <circle cx="112" cy="104" r="82" fill="#FFF3E6" opacity=".7"/>
+    <circle cx="112" cy="104" r="82" style="fill:var(--surface)" opacity=".6"/>
     <path d="M150 52c18-6 30 2 32 14-14 4-26 0-32-14z" fill="#6FAE8A"/><path d="M150 52c10 2 20 8 32 14" stroke="#2F7D5B" stroke-width="2" fill="none"/>
-    <path d="M36 118h150a75 75 0 0 1-150 0z" fill="#C2410C"/>
-    <path d="M36 118h150" stroke="#9A3412" stroke-width="8" stroke-linecap="round"/>
-    <ellipse cx="111" cy="117" rx="70" ry="9" fill="#F7D774"/>
+    <path d="M36 118h150a75 75 0 0 1-150 0z" style="fill:var(--primary)" opacity=".88"/>
+    <path d="M36 118h150" style="stroke:var(--primary)" stroke-width="8" stroke-linecap="round"/>
+    <ellipse cx="111" cy="117" rx="70" ry="9" style="fill:var(--butter)"/>
     <circle cx="90" cy="114" r="6" fill="#E8862E"/><circle cx="120" cy="112" r="5" fill="#6FAE8A"/><circle cx="140" cy="116" r="4" fill="#B42318"/>
     <path d="M86 92c-8-10 8-14 0-26M110 88c-8-10 8-14 0-26M134 92c-8-10 8-14 0-26" stroke="#C9A58C" stroke-width="5" stroke-linecap="round" fill="none" opacity=".75"/>
-    <path d="M70 150c20 14 62 14 82 0" stroke="#9A3412" stroke-width="4" stroke-linecap="round" fill="none" opacity=".35"/>
+    <path d="M70 150c20 14 62 14 82 0" style="stroke:var(--surface)" stroke-width="4" stroke-linecap="round" fill="none" opacity=".35"/>
   </svg>`);
 }
 function emptyArt() {

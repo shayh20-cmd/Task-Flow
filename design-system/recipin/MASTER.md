@@ -32,3 +32,13 @@ Lucide (ISC), one stroke weight (2px), sprite at `public/icons.svg`. Sizes: 16 /
 - Mobile ≤760px: floating bottom tab bar (5 items, raised "+" in the middle), bottom-sheet dialogs, 2-column masonry.
 - Desktop: top nav + primary CTA, 5-column masonry.
 - Touch targets ≥ 44px; `prefers-reduced-motion` disables motion.
+
+## Palettes (switchable, `<html data-theme>`)
+| id | name | primary | accent | bg | source row |
+|---|---|---|---|---|---|
+| terracotta (default) | טרקוטה | `#9A3412` | `#2F7D5B` | `#FFF8EE` | #97 Recipe & Cooking App |
+| cafe | קפה ומאפה | `#92400E` | `#4F7A3A` | `#FFF9EC` | #63 Bakery/Cafe |
+| wine | יין וענבים | `#7A1F3D` | `#A16207` | `#FCF6F4` | #64 Brewery/Winery |
+| market | שוק ירוק | `#3F6B2A` | `#0F766E` | `#F7F8EF` | #50 Agriculture/Farm (olive-shifted) |
+| sea | ים תיכון | `#1D4E89` | `#2F7D5B` | `#F6F8FB` | custom, Mediterranean |
+Each has a separate dark-mode set. Kashrut colors (meat/dairy/parve) stay fixed across palettes so their meaning never changes.
