@@ -202,15 +202,18 @@ class Store {
 
   // ---- collections ----
   listCollections() {
+    const covers = this.db.prepare(
+      `SELECT r.cover FROM collection_recipes x JOIN recipes r ON r.id = x.recipe_id
+        WHERE x.collection_id = ? AND r.cover != '' ORDER BY r.created_at DESC LIMIT 4`,
+    );
     return this.db
       .prepare(
-        `SELECT c.*, COUNT(cr.recipe_id) AS count,
-           (SELECT r.cover FROM collection_recipes x JOIN recipes r ON r.id = x.recipe_id
-             WHERE x.collection_id = c.id AND r.cover != '' ORDER BY r.created_at DESC LIMIT 1) AS cover
+        `SELECT c.*, COUNT(cr.recipe_id) AS count
          FROM collections c LEFT JOIN collection_recipes cr ON cr.collection_id = c.id
          GROUP BY c.id ORDER BY c.name`,
       )
-      .all();
+      .all()
+      .map((c) => ({ ...c, covers: covers.all(c.id).map((r) => r.cover) }));
   }
   getCollection(id) {
     return this.db.prepare('SELECT * FROM collections WHERE id = ?').get(id) || null;
