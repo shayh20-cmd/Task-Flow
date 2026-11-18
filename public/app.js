@@ -76,12 +76,12 @@ const placeholder = (title, ic = 'cooking-pot') => html`<div class="ph" style="-
 
 // ---------- colour palettes ----------
 const THEMES = [
+  { id: 'minimal', name: 'מינימלי', desc: 'נקי, אוורירי, גווני פסטל · ברירת המחדל', dots: ['#1D1C1A', '#DFE9DD', '#F6E3D6'] },
   { id: 'terracotta', name: 'טרקוטה', desc: 'חמים וביתי, כמו סיר חרס', dots: ['#9A3412', '#2F7D5B', '#FCE7DA'] },
   { id: 'cafe', name: 'קפה ומאפה', desc: 'חום קרמל, דבש וקרם', dots: ['#92400E', '#4F7A3A', '#FBE9C8'] },
   { id: 'wine', name: 'יין וענבים', desc: 'בורדו עמוק עם נגיעת זהב', dots: ['#7A1F3D', '#A16207', '#F7E1E8'] },
   { id: 'market', name: 'שוק ירוק', desc: 'זית, עשבי תיבול ורעננות', dots: ['#3F6B2A', '#0F766E', '#E4EED8'] },
   { id: 'sea', name: 'ים תיכון', desc: 'כחול אריחים יווני ושמש', dots: ['#1D4E89', '#2F7D5B', '#E0EAF6'] },
-  { id: 'minimal', name: 'מינימלי', desc: 'נקי, אוורירי, גווני פסטל', dots: ['#1D1C1A', '#DFE9DD', '#F6E3D6'] },
 ];
 function currentTheme() {
   return document.documentElement.dataset.theme || 'terracotta';

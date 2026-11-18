@@ -1,18 +1,18 @@
 <!doctype html>
-<html lang="he" dir="rtl">
+<html lang="he" dir="rtl" data-theme="minimal">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Recipin</title>
   <meta name="description" content="Recipin – כל המתכונים שלך במקום אחד" />
-  <meta name="theme-color" content="#FFF8EE" media="(prefers-color-scheme: light)" />
-  <meta name="theme-color" content="#17110D" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#F5F4F0" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#121211" media="(prefers-color-scheme: dark)" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" href="/icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="/icon.svg" />
   <link rel="preload" href="/fonts/fredoka-hebrew-600-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/fonts/assistant-hebrew-400-normal.woff2" as="font" type="font/woff2" crossorigin />
-  <script>try{var t=localStorage.getItem('recipin-theme');if(t&&t!=='terracotta')document.documentElement.dataset.theme=t}catch(e){}</script>
+  <script>try{var t=localStorage.getItem('recipin-theme'),h=document.documentElement;if(t==='terracotta')h.removeAttribute('data-theme');else if(t)h.dataset.theme=t}catch(e){}</script>
   <link rel="stylesheet" href="/styles.css" />
   <link rel="stylesheet" href="/theme-minimal.css" />
 </head>

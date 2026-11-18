@@ -5,8 +5,8 @@
   "dir": "rtl",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#fffaf5",
-  "theme_color": "#c2410c",
+  "background_color": "#F5F4F0",
+  "theme_color": "#1D1C1A",
   "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }],
   "share_target": {
     "action": "/share-target",
