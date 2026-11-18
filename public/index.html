@@ -18,19 +18,30 @@
 </head>
 <body>
   <div class="splash" id="splash" aria-hidden="true">
-    <div class="splash-logo">
-      <svg class="splash-mark" viewBox="0 0 32 32">
-        <path d="M16 1.5C9.4 1.5 4.2 6.6 4.2 13c0 8.4 10 16.6 11 17.4a1.3 1.3 0 0 0 1.6 0c1-.8 11-9 11-17.4C27.8 6.6 22.6 1.5 16 1.5z" fill="#9A3412"/>
-        <circle cx="16" cy="13" r="9.7" fill="#FFF3E6"/>
-        <g transform="rotate(45 16 13)"><g fill="none" stroke="#9A3412" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"><path d="M16 15.6C11.9 12.8 11.9 5.5 16 5.5s4.1 7.3 0 10.1z"/><path d="M16 15.6c-2-2.9-2-10.1 0-10.1s2 7.2 0 10.1zM16 5.5v10.1"/></g><rect x="15.05" y="15.2" width="1.9" height="5.2" rx="0.95" fill="#9A3412"/></g>
+    <div class="sp-stage">
+      <span class="sp-ring"></span>
+      <svg class="sp-steam" viewBox="0 0 48 30">
+        <path style="--i:0" d="M14 28c-4-5 4-8 0-14"/><path style="--i:1" d="M24 28c-4-6 4-9 0-17"/><path style="--i:2" d="M34 28c-4-5 4-8 0-14"/>
       </svg>
-      <span class="brand-name splash-name">Recipin</span>
+      <div class="sp-pin">
+        <svg viewBox="0 0 32 32">
+          <path d="M16 1.5C9.4 1.5 4.2 6.6 4.2 13c0 8.4 10 16.6 11 17.4a1.3 1.3 0 0 0 1.6 0c1-.8 11-9 11-17.4C27.8 6.6 22.6 1.5 16 1.5z" fill="#9A3412"/>
+          <circle cx="16" cy="13" r="9.7" fill="#FFF3E6"/>
+          <g class="sp-whisk"><g transform="rotate(45 16 13)"><g fill="none" stroke="#9A3412" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"><path d="M16 15.6C11.9 12.8 11.9 5.5 16 5.5s4.1 7.3 0 10.1z"/><path d="M16 15.6c-2-2.9-2-10.1 0-10.1s2 7.2 0 10.1zM16 5.5v10.1"/></g><rect x="15.05" y="15.2" width="1.9" height="5.2" rx="0.95" fill="#9A3412"/></g></g>
+        </svg>
+      </div>
+      <svg class="sp-ing" style="--x:-150px;--y:-170px;--r:-140deg;--d:400ms" viewBox="0 0 20 20"><circle cx="10" cy="11.5" r="7.5" fill="#B42318"/><path d="M10 3.5c-.8 1.3-2.4 1.8-4 1.5.9 1.1 2.4 1.6 4 1.3 1.6.3 3.1-.2 4-1.3-1.6.3-3.2-.2-4-1.5z" fill="#2F7D5B"/></svg>
+      <svg class="sp-ing" style="--x:160px;--y:-140px;--r:160deg;--d:450ms" viewBox="0 0 20 20"><path d="M3 17C3 8 9 3 17 3c0 8-5 14-14 14z" fill="#2F7D5B"/><path d="M4.5 15.5 13 7" stroke="#E1F1E7" stroke-width="1.1" stroke-linecap="round"/></svg>
+      <svg class="sp-ing" style="--x:-170px;--y:60px;--r:120deg;--d:500ms" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" fill="#F2C94C"/><circle cx="10" cy="10" r="6.2" fill="#FFF3C4"/><path d="M10 4v12M4 10h12M5.8 5.8l8.4 8.4M14.2 5.8l-8.4 8.4" stroke="#F2C94C" stroke-width="0.9"/></svg>
+      <svg class="sp-ing" style="--x:170px;--y:50px;--r:-120deg;--d:550ms" viewBox="0 0 20 20"><ellipse cx="10" cy="10.5" rx="7" ry="8" fill="#FFFFFF" stroke="#EADBC8"/><circle cx="10" cy="11.5" r="3.6" fill="#F2A93B"/></svg>
+      <svg class="sp-ing" style="--x:10px;--y:-230px;--r:90deg;--d:600ms" viewBox="0 0 20 20"><circle cx="6" cy="8" r="2.6" fill="#2A1A12"/><circle cx="13" cy="6.5" r="2.3" fill="#2A1A12"/><circle cx="10" cy="13.5" r="2.5" fill="#2A1A12"/></svg>
     </div>
-    <p class="splash-tag" dir="ltr"><span>Pin it.</span> <span>Cook it.</span></p>
+    <div class="sp-word brand-name" dir="ltr"><span style="--i:0">R</span><span style="--i:1">e</span><span style="--i:2">c</span><span style="--i:3">i</span><span style="--i:4">p</span><span style="--i:5">i</span><span style="--i:6">n</span></div>
+    <p class="sp-tag" dir="ltr"><span>Pin it.</span> <span>Cook it.</span></p>
   </div>
   <script>(function(){var s=document.getElementById('splash'),r=matchMedia('(prefers-reduced-motion: reduce)').matches,done=0;
-  function hide(){if(done)return;done=1;s.classList.add('splash-out');setTimeout(function(){s.remove()},r?0:450)}
-  s.addEventListener('click',hide);setTimeout(hide,r?1200:2600)})()</script>
+  function hide(){if(done)return;done=1;s.classList.add('splash-out');setTimeout(function(){s.remove()},r?320:650)}
+  s.addEventListener('click',hide);setTimeout(hide,r?1500:4000)})()</script>
   <a class="skip" href="#view">דלג לתוכן</a>
   <header class="topbar" id="topbar">
     <a class="brand" href="#/" aria-label="Recipin – לספר המתכונים">

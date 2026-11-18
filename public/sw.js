@@ -1,6 +1,6 @@
 // Minimal service worker: makes Recipin installable (needed for "Share → Recipin" on Android)
 // and keeps the app shell available offline. API calls always go to the network.
-const SHELL = 'recipin-shell-v8';
+const SHELL = 'recipin-shell-v9';
 const FILES = ['/', '/index.html', '/app.js', '/kitchen.js', '/styles.css', '/theme-minimal.css', '/icon.svg', '/icons.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {
