@@ -17,6 +17,20 @@
   <link rel="stylesheet" href="/theme-minimal.css" />
 </head>
 <body>
+  <div class="splash" id="splash" aria-hidden="true">
+    <div class="splash-logo">
+      <svg class="splash-mark" viewBox="0 0 32 32">
+        <path d="M16 1.5C9.4 1.5 4.2 6.6 4.2 13c0 8.4 10 16.6 11 17.4a1.3 1.3 0 0 0 1.6 0c1-.8 11-9 11-17.4C27.8 6.6 22.6 1.5 16 1.5z" fill="#9A3412"/>
+        <circle cx="16" cy="13" r="8.2" fill="#FFF3E6"/>
+        <g fill="none" stroke="#9A3412" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"><path d="M16 15.6C11.9 12.8 11.9 5.5 16 5.5s4.1 7.3 0 10.1z"/><path d="M16 15.6c-2-2.9-2-10.1 0-10.1s2 7.2 0 10.1zM16 5.5v10.1"/></g><rect x="15.05" y="15.2" width="1.9" height="5.2" rx="0.95" fill="#9A3412"/>
+      </svg>
+      <span class="brand-name splash-name">Recipin</span>
+    </div>
+    <p class="splash-tag" dir="ltr"><span>Pin it.</span> <span>Cook it.</span></p>
+  </div>
+  <script>(function(){var s=document.getElementById('splash'),r=matchMedia('(prefers-reduced-motion: reduce)').matches,done=0;
+  function hide(){if(done)return;done=1;s.classList.add('splash-out');setTimeout(function(){s.remove()},r?0:450)}
+  s.addEventListener('click',hide);setTimeout(hide,r?1200:2600)})()</script>
   <a class="skip" href="#view">דלג לתוכן</a>
   <header class="topbar" id="topbar">
     <a class="brand" href="#/" aria-label="Recipin – לספר המתכונים">

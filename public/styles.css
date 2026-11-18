@@ -699,6 +699,18 @@ dialog::backdrop { background: var(--scrim); backdrop-filter: blur(3px); }
 .toast.error { background: var(--danger); color: #fff; }
 @media (max-width: 760px) { .toast { bottom: calc(var(--tabbar-h) + 24px + env(safe-area-inset-bottom)); } }
 
+/* ---------- launch splash (logo, then "Pin it." / "Cook it." fade in one after the other) ---------- */
+.splash { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  background: var(--bg); color: var(--ink); transition: opacity 0.4s ease, visibility 0.4s; cursor: pointer; }
+.splash.splash-out { opacity: 0; visibility: hidden; }
+.splash-logo { display: flex; flex-direction: column; align-items: center; gap: 10px; animation: pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.splash-mark { width: 112px; height: 112px; }
+.splash .splash-name { font-size: 2.4rem; }
+.splash-tag { margin: 0; display: flex; gap: 0.4em; font-family: var(--font-display); font-weight: 600; font-size: 1.35rem; color: var(--ink-2); }
+.splash-tag span { opacity: 0; animation: fade 0.6s ease forwards; }
+.splash-tag span:first-child { animation-delay: 0.6s; }
+.splash-tag span:last-child { animation-delay: 1.3s; color: var(--primary-ink); }
+
 /* ---------- motion ---------- */
 @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
@@ -709,6 +721,7 @@ dialog::backdrop { background: var(--scrim); backdrop-filter: blur(3px); }
 @keyframes ring { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(-3deg); } 40% { transform: rotate(3deg); } 60% { transform: rotate(-2deg); } }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; scroll-behavior: auto !important; }
+  .splash-tag span { animation: none; opacity: 1; }
 }
 
 /* ---------- paste recipe text ---------- */
