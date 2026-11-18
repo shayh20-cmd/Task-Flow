@@ -15,10 +15,10 @@ const DAIRY = [
   'milk', 'butter', 'cream', 'cheese', 'yogurt', 'yoghurt', 'mozzarella', 'parmesan', 'ricotta', 'mascarpone',
   'feta', 'cheddar', 'ghee', 'buttermilk', 'kefir',
 ];
-const NOT_MEAT = ['אבקת מרק עוף פרווה', 'מרק עוף צמחי', 'בשר צמחי', 'טבעול', 'vegan chicken', 'plant-based meat', 'beyond meat'];
+const NOT_MEAT = ['אבקת מרק עוף פרווה', 'מרק עוף צמחי', 'בשר צמחי', 'טבעול', 'אגוז הודו', 'אגוזי הודו', 'vegan chicken', 'plant-based meat', 'beyond meat'];
 const MEAT = [
   'עוף', 'בשר', 'בקר', 'כבש', 'טלה', 'הודו', 'שניצל', 'כרעיים', 'שוקיים', 'כנפיים', 'חזה', 'פרגית', 'פרגיות',
-  'אנטריקוט', 'אסאדו', 'צלעות', 'קציצ', 'נקניק', 'סלמי', 'פסטרמה', 'כבד', 'שווארמה', 'המבורגר', 'טחון', 'אווז', 'ברווז',
+  'אנטריקוט', 'אסאדו', 'צלעות', 'נקניק', 'סלמי', 'פסטרמה', 'כבד', 'שווארמה', 'המבורגר', 'אווז', 'ברווז',
   'chicken', 'beef', 'lamb', 'turkey', 'veal', 'pork', 'bacon', 'ham', 'sausage', 'steak', 'ground meat', 'mince',
   'duck', 'salami', 'pastrami', 'brisket',
 ];
@@ -35,10 +35,16 @@ function strip(text, phrases) {
   return t;
 }
 
+// Short Hebrew words that hide inside other words ("לכבד" = to serve, "אגוז הודו" = coconut):
+// these match only as a whole word, with an optional one-letter prefix (ו/ה/ב/מ/ש; not ל — "לכבד" is "to serve") and plural ending.
+const WHOLE_WORD = new Set(['כבד', 'חזה', 'הודו', 'כבש', 'טלה', 'בקר', 'דג']);
+
 function hasWord(text, words) {
   return words.some((w) => {
-    // Hebrew: substring is fine (prefixes like ו/ה/ב attach to words). English: require word boundary at start.
+    // English: require a word boundary at the start.
     if (/[a-z]/.test(w)) return new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i').test(text);
+    if (WHOLE_WORD.has(w)) return new RegExp(`(^|[^\\p{L}])[והבמש]?${w}(ים|ות|ה)?(?=$|[^\\p{L}])`, 'u').test(text);
+    // Other Hebrew words: substring is fine (prefixes like ו/ה/ב attach to words).
     return text.includes(w);
   });
 }

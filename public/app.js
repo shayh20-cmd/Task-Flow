@@ -85,7 +85,14 @@ const hostOf = (u) => {
 };
 
 const KOSHER = { בשרי: 'k-meat', חלבי: 'k-dairy', פרווה: 'k-parve' };
-const kosherOf = (r) => r.tags.find((t) => KOSHER[t]);
+const kosherOn = () => {
+  try {
+    return localStorage.getItem('recipin-kosher') !== 'off';
+  } catch {
+    return true;
+  }
+};
+const kosherOf = (r) => (kosherOn() ? r.tags.find((t) => KOSHER[t]) : undefined);
 const PH = ['#FCE7DA', '#FBE3A6', '#DCEFD9', '#F8D9CF', '#E7E0F5', '#D9EAF7'];
 const phColor = (s) => PH[[...String(s)].reduce((a, c) => a + c.charCodeAt(0), 0) % PH.length];
 const placeholder = (title, ic = 'cooking-pot') => html`<div class="ph" style="--ph:${phColor(title)}">${icon(ic)}<b>${title}</b></div>`;
@@ -295,7 +302,7 @@ function filtersHtml(tags) {
   const on = new Set(state.filters);
   const pressed = (t) => raw(`aria-pressed="${on.has(t)}"`);
   const counts = Object.fromEntries(tags.map((t) => [t.tag, t.count]));
-  const quick = ['בשרי', 'חלבי', 'פרווה'].filter((t) => counts[t] || on.has(t));
+  const quick = kosherOn() ? ['בשרי', 'חלבי', 'פרווה'].filter((t) => counts[t] || on.has(t)) : [];
   const rest = tags.filter((t) => !KOSHER[t.tag] && t.tag !== 'עד 30 דקות').slice(0, 30);
   const hasQuick = counts['עד 30 דקות'] || on.has('עד 30 דקות');
   if (!quick.length && !rest.length && !hasQuick) return html``;
@@ -701,7 +708,9 @@ async function showRecipe(id) {
         </div>
       </div>
       <section class="r-sheet">
-        ${k ? html`<span class="kosher ${KOSHER[k]}" style="box-shadow:none;background:var(--surface-2);margin-bottom:10px">${k}</span>` : ''}
+        ${k
+          ? html`<span class="kosher ${KOSHER[k]}" style="box-shadow:none;background:var(--surface-2);margin-bottom:10px" title="כשרות">${k}${r.autoTags.includes(k) ? html`<small class="kosher-src">· זוהה לפי המצרכים</small>` : ''}</span>`
+          : ''}
         <h1>${r.title}</h1>
         ${r.description
           ? r.description.length > 320
@@ -720,7 +729,6 @@ async function showRecipe(id) {
           : ''}
         <div class="r-cta">
           ${realSteps.length ? html`<button class="btn primary big" id="cookBtn">${icon('chef-hat')}מצב בישול</button>` : ''}
-          ${READONLY ? '' : html`<a class="btn soft big" href="#/r/${r.id}/edit">${icon('pencil')}עריכה ותגיות</a>`}
           ${linkOnly && source
             ? html`<a class="btn primary big" href="${source}" target="_blank" rel="noopener noreferrer">${icon('external-link')}${/instagram\.com/i.test(source) ? 'פתיחת הפוסט באינסטגרם' : 'פתיחת המתכון באתר'}</a>`
             : ''}
@@ -1389,6 +1397,16 @@ async function mountEditor(host, r) {
       </section>
       <section class="ed-card">
         <h2><span class="num">4</span>תגיות ואוספים</h2>
+        ${kosherOn()
+          ? html`<div class="field">
+              <span class="label" id="kosherLabel">כשרות</span>
+              <div class="kosher-pick" id="kosherPick" role="radiogroup" aria-labelledby="kosherLabel">
+                ${['בשרי', 'חלבי', 'פרווה'].map((k) => html`<button type="button" role="radio" class="chip ${KOSHER[k]}" data-k="${k}"><span class="dot"></span>${k}</button>`)}
+                <button type="button" role="radio" class="chip" data-k="">ללא סימון</button>
+              </div>
+              <span class="hint" id="kosherHint"></span>
+            </div>`
+          : ''}
         <div class="field">
           <label class="label" for="tagText">תגיות <span class="hint">· הירוקות נוספו אוטומטית לפי המצרכים</span></label>
           <div class="tag-row">
@@ -1436,10 +1454,31 @@ async function mountEditor(host, r) {
           <button type="button" class="mk" data-cover="${i}" aria-label="קביעה כתמונה ראשית">${icon('star', 'sm')}</button></div>`,
       )}`,
     );
+  // Kashrut: picked automatically from the ingredients until the user chooses; a manual choice sticks.
+  const KOSHER_KEYS = Object.keys(KOSHER);
+  const lockKosher = () => KOSHER_KEYS.forEach((k) => (ed.removedAuto.add(k), ed.autoTags.delete(k)));
+  {
+    const cur = ed.tags.find((t) => KOSHER[t]);
+    const manualChoice = cur ? !ed.autoTags.has(cur) : !isNew && (r.ingredients || []).length > 0;
+    if (manualChoice) lockKosher();
+  }
+  const drawKosher = () => {
+    const pick = $('#kosherPick');
+    if (!pick) return;
+    const cur = ed.tags.find((t) => KOSHER[t]) || '';
+    $$('[data-k]', pick).forEach((b) => b.setAttribute('aria-checked', String(b.dataset.k === cur)));
+    $('#kosherHint').textContent = !cur
+      ? ed.removedAuto.has('בשרי') ? 'בלי סימון כשרות למתכון הזה.' : 'יסומן אוטומטית לפי המצרכים.'
+      : ed.autoTags.has(cur)
+        ? 'נבחר אוטומטית לפי המצרכים. אפשר לשנות.'
+        : 'נבחר ידנית.';
+  };
   const drawTags = () => {
     $$('#tagInput .chip').forEach((c) => c.remove());
     const input = $('#tagText');
+    drawKosher();
     for (const t of ed.tags) {
+      if (KOSHER[t] && kosherOn()) continue;
       const c = document.createElement('button');
       c.type = 'button';
       c.className = 'chip' + (ed.autoTags.has(t) ? ' auto' : '');
@@ -1477,6 +1516,15 @@ async function mountEditor(host, r) {
   drawCover();
   drawThumbs();
   drawTags();
+
+  $('#kosherPick')?.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-k]');
+    if (!b) return;
+    ed.tags = ed.tags.filter((t) => !KOSHER[t]);
+    if (b.dataset.k) ed.tags.unshift(b.dataset.k);
+    lockKosher();
+    drawTags();
+  });
 
   // Android keyboards (Gboard, Samsung) often report keyCode 229 instead of Enter/comma,
   // so tags are also committed on input (comma typed), on change (Done / leaving the field) and by the button.
@@ -1870,6 +1918,11 @@ async function showSettings() {
         <a class="btn soft" href="#/settings/tags" style="align-self:flex-start">${icon('tag', 'sm')}ניהול תגיות</a>
       </section>
       <section class="ed-card" style="margin-top:16px">
+        <h2>${icon('utensils-crossed')}סימון כשרות</h2>
+        <p class="muted">התווית בשרי / חלבי / פרווה על המתכונים. Recipin בוחר אותה לבד לפי המצרכים, ואפשר לשנות אותה בעריכת מתכון. מי שלא צריך, יכול לכבות.</p>
+        <label class="switch"><input type="checkbox" id="kosherToggle" ${raw(kosherOn() ? 'checked' : '')} /><span>הצגת סימון כשרות</span></label>
+      </section>
+      <section class="ed-card" style="margin-top:16px">
         <h2>${icon('palette')}מראה</h2>
         <p class="muted">שישה סגנונות צבע לבחירה. הבחירה נשמרת במכשיר.</p>
         <button class="btn soft" id="pickTheme" style="align-self:flex-start">${icon('palette', 'sm')}בחירת צבעים</button>
@@ -1889,6 +1942,14 @@ async function showSettings() {
     </div>`,
   );
   $('#pickTheme').onclick = themeDialog;
+  $('#kosherToggle').onchange = (e) => {
+    try {
+      localStorage.setItem('recipin-kosher', e.target.checked ? 'on' : 'off');
+    } catch {
+      /* storage unavailable */
+    }
+    toast(e.target.checked ? 'סימון הכשרות מוצג' : 'סימון הכשרות הוסתר', { ic: 'check' });
+  };
   $('#doBackup')?.addEventListener('click', async (e) => {
     const btn = e.currentTarget;
     btn.disabled = true;
@@ -2104,4 +2165,9 @@ async function showTagDetail(tag) {
 // ---------- boot ----------
 if ('serviceWorker' in navigator && !READONLY && !APP) navigator.serviceWorker.register('/sw.js').catch(() => {});
 if (APP) setupNative();
+if (APP)
+  import('./local-api.js')
+    .then((m) => m.refreshAutoTagsOnce())
+    .then((n) => n && (route(), toast(`עדכנו את התגיות האוטומטיות ב-${n} מתכונים`, { ic: 'sparkles' })))
+    .catch(() => {});
 route();

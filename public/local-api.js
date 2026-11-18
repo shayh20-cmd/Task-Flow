@@ -234,6 +234,39 @@ export async function restoreBackup(data) {
   return { recipes: data.recipes.length };
 }
 
+/**
+ * One-time update after the auto-tag rules change: recompute only the automatic tags of each recipe
+ * (manual tags and a manually chosen kashrut stay). Runs once per rules version.
+ */
+const AUTOTAG_RULES_VERSION = '2';
+export async function refreshAutoTagsOnce() {
+  try {
+    if (localStorage.getItem('recipin-autotag-rules') === AUTOTAG_RULES_VERSION) return 0;
+  } catch {
+    return 0;
+  }
+  const KOSHER = ['בשרי', 'חלבי', 'פרווה'];
+  let changed = 0;
+  for (const r of await getAll('recipes')) {
+    const oldAuto = new Set(r.autoTags || []);
+    const manual = r.tags.filter((t) => !oldAuto.has(t));
+    const manualKosher = manual.some((t) => KOSHER.includes(t));
+    let fresh = autoTags(r);
+    if (manualKosher) fresh = fresh.filter((t) => !KOSHER.includes(t));
+    const tags = [...new Set([...fresh, ...manual])];
+    if (tags.join('|') !== r.tags.join('|')) {
+      await put('recipes', { ...r, tags, autoTags: fresh });
+      changed++;
+    }
+  }
+  try {
+    localStorage.setItem('recipin-autotag-rules', AUTOTAG_RULES_VERSION);
+  } catch {
+    /* ignore */
+  }
+  return changed;
+}
+
 export async function stats() {
   const [recipes, collections, images] = await Promise.all([getAll('recipes'), getAll('collections'), getAll('images')]);
   const bytes = images.reduce((s, i) => s + (i.blob?.size || 0), 0);

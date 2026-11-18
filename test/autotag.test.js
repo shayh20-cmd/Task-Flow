@@ -39,3 +39,14 @@ test('time tags', () => {
 test('section headings are ignored', () => {
   assert.deepEqual(tags(['## לבצק', 'קמח', 'מים']), ['פרווה', 'טבעוני']);
 });
+
+test('no false "meat": fish/lentil patties, minced fish, coconut, "to serve"', () => {
+  assert.deepEqual(tags(['1 ק"ג פילה אמנון טחון', '2 ביצים']), ['פרווה', 'דגים']);
+  assert.deepEqual(tags(['2 כוסות עדשים', 'לקציצות: פירורי לחם']), ['פרווה', 'טבעוני']);
+  assert.deepEqual(tags(['1 כוס אגוז הודו מגורד', 'כוס סוכר']), ['פרווה', 'טבעוני']);
+  assert.deepEqual(tags(['2 כפות שמן זית', 'פלפל שחור לכבד את המנה']), ['פרווה', 'טבעוני']);
+  // real meat still detected
+  assert.deepEqual(tags(['500 גרם כבד עוף']), ['בשרי']);
+  assert.deepEqual(tags(['200 גרם חזה הודו']), ['בשרי']);
+  assert.deepEqual(tags(['500 גרם בשר בקר טחון']), ['בשרי']);
+});

@@ -761,3 +761,15 @@ dialog::backdrop { background: var(--scrim); backdrop-filter: blur(3px); }
 .pick { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 6px 12px; cursor: pointer; font-weight: 600; }
 .pick + .pick { border-top: 1px solid var(--line); }
 .pick input { width: 22px; height: 22px; min-height: 0; padding: 0; accent-color: var(--primary); flex: none; }
+
+/* ---------- kashrut ---------- */
+.kosher-src { font-weight: 600; opacity: 0.75; margin-inline-start: 2px; }
+.kosher-pick { display: flex; flex-wrap: wrap; gap: 8px; }
+.kosher-pick .chip { box-shadow: none; border: 1.5px solid var(--line); background: var(--surface); }
+.kosher-pick .chip[aria-checked='true'] { border-color: currentColor; background: var(--surface-2); font-weight: 700; }
+.kosher-pick .chip[data-k=''][aria-checked='true'] { color: var(--ink); }
+.switch { display: flex; align-items: center; gap: 12px; min-height: 44px; font-weight: 600; cursor: pointer; }
+.switch input { appearance: none; width: 50px; height: 30px; min-height: 0; padding: 0; border-radius: 30px; border: 0; background: var(--line); position: relative; cursor: pointer; transition: background-color var(--t-fast); flex: none; }
+.switch input::after { content: ''; position: absolute; top: 3px; inset-inline-start: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / 25%); transition: inset-inline-start var(--t-base) var(--ease-spring); }
+.switch input:checked { background: var(--accent); }
+.switch input:checked::after { inset-inline-start: 23px; }
