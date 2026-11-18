@@ -42,3 +42,8 @@ Lucide (ISC), one stroke weight (2px), sprite at `public/icons.svg`. Sizes: 16 /
 | market | שוק ירוק | `#3F6B2A` | `#0F766E` | `#F7F8EF` | #50 Agriculture/Farm (olive-shifted) |
 | sea | ים תיכון | `#1D4E89` | `#2F7D5B` | `#F6F8FB` | custom, Mediterranean |
 Each has a separate dark-mode set. Kashrut colors (meat/dairy/parve) stay fixed across palettes so their meaning never changes.
+
+## Style variant: Minimal (`data-theme="minimal"`, `public/theme-minimal.css`)
+Inspired by minimal fintech mobile UI: canvas `#F5F4F0`, white cards with 1px hairline `#E7E4DE` and no clay shadow,
+near-black pill CTA `#1D1C1A`, pastel tiles (sage `#DFE9DD`, peach `#F6E3D6`, lavender `#E5E2F3`, sky `#DDE9F2`, butter `#F1E7C2`),
+single family (Assistant) for headings and body, flat hero without illustration, outlined chips and step numbers.
