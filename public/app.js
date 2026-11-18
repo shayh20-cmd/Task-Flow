@@ -1177,8 +1177,9 @@ function showAddPhoto() {
         <input type="file" accept="image/*" multiple id="photoInput" class="sr-only" />
         <span class="bubble b-photo">${icon('camera')}</span>
         <strong>בחירת תמונות או צילום</strong>
-        <span class="muted">דף מספר, כתב יד של סבתא, צילום מסך מאינסטגרם. אפשר כמה תמונות.</span>
+        <span class="muted">דף מספר, כתב יד של סבתא, צילום מסך מאינסטגרם. אפשר כמה תמונות. Recipin יקרא את הטקסט ויסדר אותו.</span>
       </label>
+      <div id="ocrState"></div>
       <div id="editorHost"></div>
     </div>`,
   );
@@ -1191,8 +1192,9 @@ function showAddPhoto() {
     try {
       const urls = await uploadFiles(files);
       render($('strong', drop), html`${files.length} תמונות הועלו · החלפה`);
-      await mountEditor($('#editorHost'), { kind: 'photo', cover: urls[0], images: urls.slice(1), title: '' });
-      $('#f-title')?.focus();
+      const base = { kind: 'photo', cover: urls[0], images: urls.slice(1), title: '' };
+      await mountEditor($('#editorHost'), base);
+      await readRecipeFromImages(files, base, $('#editorHost'), $('#ocrState'));
     } catch (e) {
       toast(e.message, { error: true });
     }
@@ -1245,12 +1247,22 @@ function bindPasteBox(base, host) {
   $('#pasteParse')?.addEventListener('click', async () => {
     const text = $('#pasteText').value.trim();
     if (!text) return $('#pasteText').focus();
-    const p = parseRecipeText(text);
-    const nSteps = p.steps.filter((x) => !x.startsWith('## ')).length;
-    if (!p.ingredients.length && !nSteps) {
+    const res = await applyRecipeText(base, host, text);
+    if (!res) {
       toast('לא זיהינו מצרכים או שלבים. הוסיפו שורה "מצרכים:" ושורה "אופן ההכנה:"', { error: true });
       return;
     }
+    $('.paste-box')?.removeAttribute('open');
+    toast(`סידרנו ${res.ingredients} מצרכים ו-${res.steps} שלבים. בדקו לפני שמירה`, { ic: 'sparkles' });
+    host.scrollIntoView({ block: 'start' });
+  });
+}
+
+/** Organise free text into the editor (keeps the recipe's photo, source, manual tags). Returns counts, or null. */
+async function applyRecipeText(base, host, text) {
+    const p = parseRecipeText(text);
+    const nSteps = p.steps.filter((x) => !x.startsWith('## ')).length;
+    if (!p.ingredients.length && !nSteps) return null;
     const { tags: auto } = await api('/api/autotags', { method: 'POST', body: { ingredients: p.ingredients } });
     const kept = (base.tags || []).filter((t) => !(base.autoTags || []).includes(t));
     Object.assign(base, {
@@ -1263,10 +1275,41 @@ function bindPasteBox(base, host) {
       autoTags: auto,
     });
     await mountEditor(host, base);
-    $('.paste-box')?.removeAttribute('open');
-    toast(`סידרנו ${p.ingredients.length} מצרכים ו-${nSteps} שלבים. בדקו לפני שמירה`, { ic: 'sparkles' });
-    host.scrollIntoView({ block: 'start' });
-  });
+    return { ingredients: p.ingredients.length, steps: nSteps };
+}
+
+// ---------- reading a recipe from photos (on-device OCR) ----------
+async function readRecipeFromImages(sources, base, host, statusEl) {
+  const bar = (frac, label) =>
+    render(
+      statusEl,
+      html`<div class="ocr-status" role="status">
+        <div class="ocr-row">${icon('sparkles', 'sm')}<span>${label}</span><b>${Math.round(frac * 100)}%</b></div>
+        <div class="progress"><i style="width:${Math.max(4, frac * 100)}%"></i></div>
+      </div>`,
+    );
+  bar(0, 'מכין את זיהוי הטקסט…');
+  let text = '';
+  try {
+    const { recognizeImages } = await import('./ocr.js');
+    text = await recognizeImages(sources, (frac, stage) => bar(frac, stage === 'reading' ? 'קורא את הטקסט מהתמונה…' : 'מכין את זיהוי הטקסט…'));
+  } catch (e) {
+    render(statusEl, html`<div class="notice">${icon('x')}<p><strong>זיהוי הטקסט נכשל</strong> (${e.message}). אפשר לכתוב את המתכון ידנית.</p></div>`);
+    return;
+  }
+  if (!text) {
+    render(statusEl, html`<div class="notice">${icon('camera')}<p><strong>לא מצאנו טקסט בתמונה.</strong> אפשר לכתוב את המתכון ידנית, או לנסות צילום חד וישר יותר.</p></div>`);
+    return;
+  }
+  const res = await applyRecipeText(base, host, text);
+  render(
+    statusEl,
+    html`${res
+      ? html`<div class="notice ok">${icon('sparkles')}<p><strong>קראנו את התמונה:</strong> ${res.ingredients} מצרכים ו-${res.steps} שלבים. זיהוי טקסט לא תמיד מדויק, אז כדאי לעבור על הפרטים. הטקסט שזוהה נמצא בתיבה למטה.</p></div>`
+      : html`<div class="notice">${icon('camera')}<p><strong>קראנו טקסט מהתמונה, אבל לא זיהינו בו מצרכים ושלבים.</strong> הטקסט בתיבה למטה: אפשר לתקן אותו (למשל להוסיף "מצרכים:" ו"אופן ההכנה:") וללחוץ "סידור למתכון".</p></div>`}
+    ${pasteBoxHtml(text, !res)}`,
+  );
+  bindPasteBox(base, host);
 }
 
 async function uploadFiles(files) {
@@ -1312,6 +1355,7 @@ async function mountEditor(host, r) {
           <div class="cover-actions">
             <label class="btn soft">${icon('image-plus', 'sm')}<span id="coverLabel">החלפת תמונה</span><input type="file" accept="image/*" id="coverFile" class="sr-only" /></label>
             <button type="button" class="btn quiet" id="coverRemove">${icon('trash-2', 'sm')}הסרה</button>
+            <button type="button" class="btn soft" id="ocrBtn">${icon('sparkles', 'sm')}קריאת המתכון מהתמונה</button>
           </div>
         </div>
         <div class="field">
@@ -1378,6 +1422,7 @@ async function mountEditor(host, r) {
     const u = safeUrl(ed.cover);
     render($('#coverPreview'), u ? html`<img src="${u}" alt="תמונה ראשית" />` : html`${icon('image-plus', 'lg')}`);
     $('#coverRemove').hidden = !u;
+    $('#ocrBtn').hidden = !u;
     $('#coverLabel').textContent = u ? 'החלפת תמונה' : 'הוספת תמונה';
   };
   const drawThumbs = () =>
@@ -1482,6 +1527,18 @@ async function mountEditor(host, r) {
     } catch (err) {
       toast(err.message, { error: true });
     }
+  };
+  $('#ocrBtn').onclick = () => {
+    Object.assign(r, { cover: ed.cover, images: ed.images });
+    // the editor is rebuilt with the result, so the status lives just above it
+    let status = $('#ocrState');
+    if (!status) {
+      status = document.createElement('div');
+      status.id = 'ocrState';
+      host.before(status);
+    }
+    status.scrollIntoView({ block: 'center' });
+    readRecipeFromImages([ed.cover, ...ed.images].map(safeUrl).filter(Boolean), r, host, status);
   };
   $('#coverRemove').onclick = () => {
     ed.cover = '';

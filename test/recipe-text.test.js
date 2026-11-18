@@ -111,3 +111,12 @@ test('no ingredients header but a steps header: the quantity block becomes the i
   assert.equal(r.title, 'פסטה ברוטב עגבניות');
   assert.deepEqual(r.ingredients, ['250 גרם פסטה', '3 עגבניות', 'שום כתוש', '2 כפות שמן זית']);
 });
+
+test('OCR cleanup: reversed "ל-180" and step numbers without a dot', async () => {
+  const { cleanOcrText } = await import('../public/shared/recipe-text.js');
+  assert.equal(cleanOcrText('מחממים תנור 180-7 מעלות.'), 'מחממים תנור ל-180 מעלות.');
+  assert.equal(cleanOcrText('אופים 25 דקות 180-ב מעלות'), 'אופים 25 דקות ב-180 מעלות');
+  assert.equal(cleanOcrText('2 כוסות קמח\n|\n\n\n\n1 כוס סוכר'), '2 כוסות קמח\n\n1 כוס סוכר');
+  const r = parseRecipeText('עוגה\nמצרכים:\n3 ביצים\nאופן ההכנה:\n1. מערבבים.\n2. יוצקים לתבנית.\n3 אופים 40 דקות.');
+  assert.deepEqual(r.steps, ['מערבבים.', 'יוצקים לתבנית.', 'אופים 40 דקות.']);
+});

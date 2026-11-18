@@ -3,12 +3,19 @@
 import { build } from 'esbuild';
 import { cpSync, rmSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
+import { OCR_FILES } from './ocr-assets.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const www = root + 'app/www';
 rmSync(www, { recursive: true, force: true });
 mkdirSync(www, { recursive: true });
 cpSync(root + 'public', www, { recursive: true, filter: (src) => !/[/\\](sw\.js|manifest\.webmanifest)$/.test(src) });
+
+for (const [dest, src] of Object.entries(OCR_FILES)) {
+  mkdirSync(dirname(`${www}/${dest}`), { recursive: true });
+  cpSync(root + src, `${www}/${dest}`);
+}
 
 await build({
   entryPoints: [root + 'app/native.js'],

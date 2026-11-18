@@ -110,7 +110,12 @@ export function parseRecipeText(input) {
     }
     if (mode === 'intro') intro.push(line);
     else if (mode === 'ing') ingredients.push(asSubheading(line) || line);
-    else if (mode === 'steps') steps.push(asSubheading(line) || line.replace(NUMBERED, ''));
+    else if (mode === 'steps') {
+      const bare = line.match(/^(\d{1,2})\s+(?=\p{L})/u);
+      const realSteps = steps.filter((x) => !x.startsWith('## ')).length;
+      if (bare && Number(bare[1]) === realSteps + 1) steps.push(line.slice(bare[0].length));
+      else steps.push(asSubheading(line) || line.replace(NUMBERED, ''));
+    }
   }
 
   // No headers: classify line by line (numbered → step, starts with a quantity → ingredient).
@@ -157,4 +162,23 @@ export function parseRecipeText(input) {
     servings: findServings(text),
     suggestedTags: tags.slice(0, 12),
   };
+}
+
+/**
+ * Fix typical OCR slips in Hebrew recipe text (Tesseract):
+ * "ל-180" comes out reversed as "180-ל" and the ל is often read as 7 ("180-7"); same for ב/ה/ו/מ/ש.
+ */
+export function cleanOcrText(text) {
+  return String(text || '')
+    .split('\n')
+    .map((line) =>
+      line
+        .replace(/(\d+(?:[.,]\d+)?)\s?-\s?7(?=\s|$|[.,])/g, 'ל-$1')
+        .replace(/(\d+(?:[.,]\d+)?)\s?-\s?([בהולמש])(?=\s|$|[.,])/g, '$2-$1')
+        .replace(/^[\s|_~—–-]+$/, '')
+        .trim(),
+    )
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }

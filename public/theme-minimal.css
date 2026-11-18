@@ -166,3 +166,4 @@
 [data-theme='minimal'] .ing-list input:checked,
 [data-theme='minimal'] .ing-list input:checked:focus { background: var(--accent); border-color: var(--accent); }
 [data-theme='minimal'] .paste-box { box-shadow: none; border: 1px solid var(--line); }
+[data-theme='minimal'] .ocr-status { box-shadow: none; border: 1px solid var(--line); }

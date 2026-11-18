@@ -738,3 +738,10 @@ dialog::backdrop { background: var(--scrim); backdrop-filter: blur(3px); }
 .menu-list button + button { border-top: 1px solid var(--line); }
 .menu-list button:active { background: var(--line); }
 .menu-list button.danger { color: var(--danger); }
+
+/* ---------- OCR ---------- */
+.ocr-status { margin-top: var(--s-4); padding: var(--s-4); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--clay); }
+.ocr-row { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.ocr-row b { margin-inline-start: auto; font-variant-numeric: tabular-nums; }
+.ocr-status .progress { margin-top: 10px; }
+#ocrState .notice, #ocrInline .notice { margin-top: var(--s-4); }

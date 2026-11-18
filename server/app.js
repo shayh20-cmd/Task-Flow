@@ -9,6 +9,7 @@ import { extractFromUrl, extractFromHtml, parseDoc } from './extract.js';
 import { instagramPost, importInstagram } from '../public/shared/instagram.js';
 import { autoTags } from '../public/shared/autotag.js';
 import { safeFetch } from './net.js';
+import { OCR_FILES } from '../scripts/ocr-assets.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const IMAGE_TYPES = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif', 'image/avif': '.avif', 'image/heic': '.heic' };
@@ -219,6 +220,9 @@ export function createApp({ dataDir = join(ROOT, 'data'), dbFile, password = pro
   });
 
   // ---------- static app ----------
+  for (const [route, src] of Object.entries(OCR_FILES)) {
+    app.get('/' + route, (_req, res) => res.sendFile(join(ROOT, src), { maxAge: '30d', headers: { 'Cache-Control': 'public, max-age=2592000, immutable' } }));
+  }
   const pub = join(ROOT, 'public');
   app.use(express.static(pub, { index: 'index.html' }));
   app.get('/s/:token', (_req, res) => res.sendFile(join(pub, 'index.html')));
