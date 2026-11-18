@@ -19,7 +19,14 @@ async function assertPublic(u) {
   if (!['http:', 'https:'].includes(u.protocol)) throw new Error('כתובת לא תקינה');
   if (process.env.RECIPIN_ALLOW_PRIVATE === '1') return;
   const host = u.hostname.replace(/^\[|\]$/g, '');
-  const addrs = isIP(host) ? [{ address: host }] : await lookup(host, { all: true });
+  let addrs;
+  try {
+    addrs = isIP(host) ? [{ address: host }] : await lookup(host, { all: true });
+  } catch (e) {
+    // Behind an outbound proxy (e.g. a sandboxed dev environment) names resolve only at the proxy.
+    if (e.code === 'ENOTFOUND' && (process.env.HTTPS_PROXY || process.env.https_proxy)) return;
+    throw e;
+  }
   if (addrs.some((a) => isPrivate(a.address))) throw new Error('לא ניתן לייבא מכתובת פנימית');
 }
 
