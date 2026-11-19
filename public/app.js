@@ -1429,24 +1429,27 @@ async function mountEditor(host, r) {
         </div>
       </section>
       <section class="ed-card">
-        <h2><span class="num">2</span>מצרכים</h2>
+        <h2><span class="num">2</span>קטגוריה</h2>
+        <div class="field">
+          <span class="sr-only" id="catLabel">קטגוריה</span>
+          <div class="cat-pick" id="catPick" role="radiogroup" aria-labelledby="catLabel"></div>
+          <span class="hint" id="catHint"></span>
+        </div>
+      </section>
+      <section class="ed-card">
+        <h2><span class="num">3</span>מצרכים</h2>
         <div class="field"><label class="sr-only" for="f-ingredients">מצרכים</label>
           <textarea id="f-ingredients" rows="8" placeholder="2 כוסות קמח&#10;1 כף סוכר&#10;## לציפוי&#10;100 גרם שוקולד" aria-describedby="ingHint">${(r.ingredients || []).join('\n')}</textarea>
           <span class="hint" id="ingHint">מצרך בכל שורה. שורה שמתחילה ב-## היא כותרת (למשל ## לבצק). כמויות בתחילת השורה יוכפלו אוטומטית כשמשנים מנות.</span></div>
       </section>
       <section class="ed-card">
-        <h2><span class="num">3</span>אופן ההכנה</h2>
+        <h2><span class="num">4</span>אופן ההכנה</h2>
         <div class="field"><label class="sr-only" for="f-steps">שלבי הכנה</label>
           <textarea id="f-steps" rows="8" aria-describedby="stepHint">${(r.steps || []).join('\n')}</textarea>
           <span class="hint" id="stepHint">שלב בכל שורה. זמנים כמו "35 דקות" יהפכו לטיימר בלחיצה.</span></div>
       </section>
       <section class="ed-card">
-        <h2><span class="num">4</span>קטגוריה, תגיות ואוספים</h2>
-        <div class="field">
-          <span class="label" id="catLabel">קטגוריה ראשית</span>
-          <div class="cat-pick" id="catPick" role="radiogroup" aria-labelledby="catLabel"></div>
-          <span class="hint" id="catHint"></span>
-        </div>
+        <h2><span class="num">5</span>תגיות ואוספים</h2>
         ${kosherOn()
           ? html`<div class="field">
               <span class="label" id="kosherLabel">כשרות</span>
@@ -1472,7 +1475,7 @@ async function mountEditor(host, r) {
           : ''}
       </section>
       <section class="ed-card">
-        <h2><span class="num">5</span>הערות ותמונות</h2>
+        <h2><span class="num">6</span>הערות ותמונות</h2>
         <div class="field"><label class="label" for="f-notes">הערות אישיות <span class="hint">(לא משותפות עם אחרים)</span></label>
           <textarea id="f-notes" rows="3" placeholder="פחות סוכר בפעם הבאה, להכפיל לשבת…">${r.notes || ''}</textarea></div>
         <div class="field"><span class="label">תמונות נוספות</span>
